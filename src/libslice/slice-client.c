@@ -12,7 +12,20 @@
 #include <unistd.h>
 
 #include "slice-client.h"
-#include "slice-mainloop.h"
+#include "slice-ssl-client.h"
+
+struct slice_client
+{
+    struct slice_mainloop_event mainloop_event;
+
+    struct slice_connection *connection;
+
+    char host[128];
+    int port;
+
+    SliceReturnType(*connect_result_cb)(struct slice_client*, int, char*);
+    SliceReturnType(*read_callback)(struct slice_client*, int, void*, char*);
+};
 
 SliceReturnType slice_client_remove(SliceClient *client, char *err)
 {
@@ -35,6 +48,7 @@ SliceReturnType slice_client_remove(SliceClient *client, char *err)
     }
 
     if (client->connection) {
+        printf("Client [%p] connection [%p] closed\n", client, client->connection);
         SliceConnectionDestroy(client->connection, NULL);
         client->connection = NULL;
     }
@@ -42,13 +56,13 @@ SliceReturnType slice_client_remove(SliceClient *client, char *err)
     return SLICE_RETURN_NORMAL;
 }
 
-static int slice_client_write_callback(SliceMainloopEpoll *epoll, SliceMainloopEpollElement *element, struct epoll_event ev, void *user_data)
+static SliceReturnType slice_client_connecting_write_callback(SliceMainloopEpoll *epoll, SliceMainloopEpollElement *element, struct epoll_event ev, void *user_data)
 {
     SliceMainloopEvent *mainloop_event;
     SliceClient *client;
 
-    mainloop_event = (SliceMainloopEvent*)element->slice_event;
-    client = (SliceClient*)element->slice_event;
+    mainloop_event = SliceMainloopEpollElementGetSliceMainloopEvent(element);
+    client = (SliceClient*)mainloop_event;
 
     int e;
     socklen_t elen;
@@ -57,31 +71,38 @@ static int slice_client_write_callback(SliceMainloopEpoll *epoll, SliceMainloopE
     elen = sizeof(e);
 
     if (getsockopt(mainloop_event->io.fd, SOL_SOCKET, SO_ERROR, (char*)&e, &elen) != 0 || e != 0) {
-        client->connect_result_cb(client, client->connection, -1, strerror(errno));
+        client->connect_result_cb(client, -1, strerror(errno));
         slice_client_remove(client, NULL);
         free(client);
-        return -1;
+        return SLICE_RETURN_ERROR;
     }
 
     SliceMainloopEpollEventRemove(mainloop_event->mainloop, mainloop_event->io.fd, NULL);
-    element->slice_event = mainloop_event;
+    SliceMainloopEpollElementSetSliceMainloopEvent(element, mainloop_event, NULL);
 
-    if (client->connect_result_cb(client, client->connection, 0, "connected") != 0) {
+    if (client->connect_result_cb(client, 0, "connected") != 0) {
         slice_client_remove(client, NULL);
         free(client);
-        return -1;
+        return SLICE_RETURN_ERROR;
     }
 
-    return 0;
+    if (!client->read_callback) {
+        printf("Client callback not found [%p]\n", client->read_callback);
+        slice_client_remove(client, NULL);
+        free(client);
+        return SLICE_RETURN_ERROR;
+    }
+
+    return SLICE_RETURN_NORMAL;
 }
 
-static int slice_client_read_callback(SliceMainloopEpoll *epoll, SliceMainloopEpollElement *element, struct epoll_event ev, void *user_data)
+static SliceReturnType slice_client_connecting_read_callback(SliceMainloopEpoll *epoll, SliceMainloopEpollElement *element, struct epoll_event ev, void *user_data)
 {
     SliceMainloopEvent *mainloop_event;
     SliceClient *client;
 
-    mainloop_event = (SliceMainloopEvent*)element->slice_event;
-    client = (SliceClient*)element->slice_event;
+    mainloop_event = SliceMainloopEpollElementGetSliceMainloopEvent(element);
+    client = (SliceClient*)mainloop_event;
 
     int e;
     socklen_t elen;
@@ -90,52 +111,176 @@ static int slice_client_read_callback(SliceMainloopEpoll *epoll, SliceMainloopEp
     elen = sizeof(e);
 
     if (getsockopt(mainloop_event->io.fd, SOL_SOCKET, SO_ERROR, (char*)&e, &elen) != 0 || e != 0) {
-        client->connect_result_cb(client, client->connection, -1, strerror(errno));
+        client->connect_result_cb(client, -1, strerror(errno));
         slice_client_remove(client, NULL);
         free(client);
-        return -1;
+        return SLICE_RETURN_ERROR;
     }
 
     SliceMainloopEpollEventRemove(mainloop_event->mainloop, mainloop_event->io.fd, NULL);
-    element->slice_event = mainloop_event;
+    SliceMainloopEpollElementSetSliceMainloopEvent(element, mainloop_event, NULL);
 
-    if (client->connect_result_cb(client, client->connection, 0, "connected") != 0) {
+    if (client->connect_result_cb(client, 0, "connected") != SLICE_RETURN_NORMAL) {
         slice_client_remove(client, NULL);
         free(client);
-        return -1;
+        return SLICE_RETURN_ERROR;
     }
 
-    return 0;
+    if (!client->read_callback) {
+        printf("Client callback not found [%p]\n", client->read_callback);
+        slice_client_remove(client, NULL);
+        free(client);
+        return SLICE_RETURN_ERROR;
+    }
+
+    return SLICE_RETURN_NORMAL;
 }
 
-static int slice_client_add_callback(SliceMainloopEvent *mainloop_event, char *err)
+static SliceReturnType slice_client_connecting_add_callback(SliceMainloopEvent *mainloop_event, char *err)
 {
     // replace read event callback
-    SliceMainloopEpollEventSetCallback(mainloop_event->mainloop, mainloop_event->io.fd, SLICE_MAINLOOP_EPOLL_EVENT_READ, slice_client_read_callback, NULL);
+    SliceMainloopEpollEventSetCallback(mainloop_event->mainloop, mainloop_event->io.fd, SLICE_MAINLOOP_EPOLL_EVENT_READ, slice_client_connecting_read_callback, NULL);
     SliceMainloopEpollEventAddRead(mainloop_event->mainloop, mainloop_event->io.fd, NULL);
 
     // add write event for check connection
-    SliceMainloopEpollEventSetCallback(mainloop_event->mainloop, mainloop_event->io.fd, SLICE_MAINLOOP_EPOLL_EVENT_WRITE, slice_client_write_callback, NULL);
+    SliceMainloopEpollEventSetCallback(mainloop_event->mainloop, mainloop_event->io.fd, SLICE_MAINLOOP_EPOLL_EVENT_WRITE, slice_client_connecting_write_callback, NULL);
     SliceMainloopEpollEventAddWrite(mainloop_event->mainloop, mainloop_event->io.fd, NULL);
 
-    return 0;
+    return SLICE_RETURN_NORMAL;
 }
 
-static int slice_client_remove_callback(SliceMainloopEvent *mainloop_event, char *err)
+static SliceReturnType slice_client_remove_callback(SliceMainloopEvent *mainloop_event, char *err)
 {
     char err_buff[SLICE_DEFAULT_ERROR_BUFF_SIZE];
 
-    if (mainloop_event->destroyed)  return 0;
+    if (mainloop_event->destroyed)  return SLICE_RETURN_NORMAL;
 
     if (slice_client_remove((SliceClient*)mainloop_event, err_buff) != SLICE_RETURN_NORMAL) {
         if (err) sprintf(err, "slice_client_destroy return error [%s]", err_buff);
-        return -1;
+        return SLICE_RETURN_ERROR;
     }
 
-    return 0;
+    return SLICE_RETURN_NORMAL;
 }
 
-SliceClient *slice_client_create(SliceMainloop *mainloop, char *host, int port, SliceConnectionType type, int(*connect_result_cb)(SliceClient*, SliceConnection*, int, char*), char *err)
+static SliceReturnType slice_client_read_callback(SliceMainloopEpoll *epoll, SliceMainloopEpollElement *element, struct epoll_event ev, void *user_data)
+{
+    if (!epoll || !element) {
+        return SLICE_RETURN_ERROR;
+    }
+
+    SliceClient *client;
+    SliceReturnType ret;
+    int r;
+    char err_buff[SLICE_DEFAULT_ERROR_BUFF_SIZE];
+
+    client = (SliceClient*)SliceMainloopEpollElementGetSliceMainloopEvent(element);
+
+    if ((ret = slice_connection_socket_read(client->connection, &r, err_buff)) == SLICE_RETURN_ERROR) {
+        printf("slice_connection_socket_read return error [%s]\n", err_buff);
+        slice_client_remove(client, NULL);
+        free(client);
+        return SLICE_RETURN_ERROR;
+    } else if (ret == SLICE_RETURN_INFO) {
+        return SLICE_RETURN_NORMAL;
+    }
+
+    if (r > 0 && client->read_callback(client, r, client->mainloop_event.user_data, "read") != 0) {
+        printf("client read callback return error\n");
+        slice_client_remove(client, NULL);
+        free(client);
+        return SLICE_RETURN_ERROR;
+    }
+    
+    return SLICE_RETURN_NORMAL;
+}
+
+static SliceReturnType slice_client_write_callback(SliceMainloopEpoll *epoll, SliceMainloopEpollElement *element, struct epoll_event ev, void *user_data)
+{
+    if (!epoll || !element) {
+        return SLICE_RETURN_ERROR;
+    }
+
+    SliceClient *client;
+    SliceReturnType ret;
+    char err_buff[SLICE_DEFAULT_ERROR_BUFF_SIZE];
+
+    client = (SliceClient*)SliceMainloopEpollElementGetSliceMainloopEvent(element);
+
+    if ((ret = slice_connection_socket_write(client->connection, err_buff)) == SLICE_RETURN_ERROR) {
+        printf("slice_connection_socket_write return error [%s]\n", err_buff);
+        slice_client_remove(client, NULL);
+        free(client);
+        return SLICE_RETURN_ERROR;
+    } else if (ret == SLICE_RETURN_INFO) {
+        return SLICE_RETURN_NORMAL;
+    }
+
+    return SLICE_RETURN_NORMAL;
+}
+
+SliceReturnType slice_client_start(SliceClient *client, SliceSSLContext *ssl_ctx, SliceReturnType(*read_callback)(SliceClient*, int, void*, char*), void(*close_callback)(SliceConnection*, void*, char*), void *user_data, char *err)
+{
+    int ret;
+    char err_buff[SLICE_DEFAULT_ERROR_BUFF_SIZE];
+
+    if (!client || !client->connection || !read_callback) {
+        if (err) sprintf(err, "Invalid parameter");
+        return SLICE_RETURN_ERROR;
+    }
+
+    if (ssl_ctx && SliceConnectionSetSSLContext(client->connection, ssl_ctx, err_buff) != SLICE_RETURN_NORMAL) {
+        if (err) sprintf(err, "SliceConnectionSetSSLContext return error [%s]", err_buff);
+        return SLICE_RETURN_ERROR;
+    }
+    
+    if (SliceConnectionSetCloseCallback(client->connection, close_callback, err_buff) != SLICE_RETURN_NORMAL) {
+        if (err) sprintf(err, "SliceConnectionSetCloseCallback return error [%s]", err_buff);
+        return SLICE_RETURN_ERROR;
+    }
+
+    client->read_callback = read_callback;
+
+    SliceMainloopEventSetUserData(&(client->mainloop_event), user_data, NULL);
+
+    SliceMainloopEpollEventSetCallback(client->mainloop_event.mainloop, client->mainloop_event.io.fd, SLICE_MAINLOOP_EPOLL_EVENT_READ, slice_client_read_callback, NULL);
+    SliceMainloopEpollEventAddRead(client->mainloop_event.mainloop, client->mainloop_event.io.fd, NULL);
+
+    SliceMainloopEpollEventSetCallback(client->mainloop_event.mainloop, client->mainloop_event.io.fd, SLICE_MAINLOOP_EPOLL_EVENT_WRITE, slice_client_write_callback, NULL);
+
+    if (ssl_ctx) {
+        if ((ret = SliceSSLClientConnect(client->mainloop_event.io.fd, ssl_ctx, err_buff)) < 0) {
+            if (err) sprintf(err, "SliceSSLClientConnect return error [%s]", err_buff);
+            return SLICE_RETURN_ERROR;
+        }
+    }
+
+    return SLICE_RETURN_NORMAL;
+}
+
+SliceReturnType slice_client_write(SliceClient *client, SliceBuffer *buffer, char *err)
+{
+    char err_buff[SLICE_DEFAULT_ERROR_BUFF_SIZE];
+
+    if (!client || !buffer) {
+        if (err) sprintf(err, "Invalid parameter");
+        return SLICE_RETURN_ERROR;
+    }
+
+    if (SliceConnectionWriteBuffer(client->connection, buffer, err_buff) != SLICE_RETURN_NORMAL) {
+        if (err) sprintf(err, "SliceConnectionWriteBuffer return error [%s]", err_buff);
+        return SLICE_RETURN_ERROR;
+    }
+
+    printf("write add write\n");
+    SliceMainloopEpollEventAddWrite(client->mainloop_event.mainloop, client->mainloop_event.io.fd, NULL);
+
+    printf("Added write buffer\n");
+
+    return SLICE_RETURN_NORMAL;
+}
+
+SliceClient *slice_client_create(SliceMainloop *mainloop, char *host, int port, SliceConnectionType type, SliceReturnType(*connect_result_cb)(SliceClient*, int, char*), char *err)
 {
     SliceClient *client;
 
@@ -156,9 +301,9 @@ SliceClient *slice_client_create(SliceMainloop *mainloop, char *host, int port, 
     }
     memset(client, 0, sizeof(SliceClient));
 
-    if (type == SLICE_CONNECTION_TYPE_IP4_TCP) {
+    if (type == SLICE_CONNECTION_TYPE_IP4_TCP || type == SLICE_CONNECTION_TYPE_IP6_TCP || type == SLICE_CONNECTION_TYPE_TCP) {
         memset(&hints, 0, sizeof(hints));
-        hints.ai_family = AF_INET;
+        hints.ai_family = (type == SLICE_CONNECTION_TYPE_IP4_TCP) ? AF_INET : (type == SLICE_CONNECTION_TYPE_IP6_TCP) ? AF_INET6 : AF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
 
         sprintf(buff, "%d", port);
@@ -168,6 +313,8 @@ SliceClient *slice_client_create(SliceMainloop *mainloop, char *host, int port, 
             free(client);
             return NULL;
         }
+
+        type = (res->ai_family == AF_INET) ? SLICE_CONNECTION_TYPE_IP4_TCP : SLICE_CONNECTION_TYPE_IP6_TCP;
         
         if ((sk = socket(res->ai_family, SOCK_STREAM, 0)) < 0) {
             if (err) sprintf(err, "socket return error [%s]", strerror(errno));
@@ -187,10 +334,6 @@ SliceClient *slice_client_create(SliceMainloop *mainloop, char *host, int port, 
 
         freeaddrinfo(res);
 
-    } else if (type == SLICE_CONNECTION_TYPE_IP6_TCP) {
-        if (err) sprintf(err, "Connection type SLICE_CONNECTION_TYPE_IP6_TCP not implement yet");
-        free(client);
-        return NULL;
     } else if (type == SLICE_CONNECTION_TYPE_IP4_UDP) {
         if (err) sprintf(err, "Connection type SLICE_CONNECTION_TYPE_IP4_UDP not implement yet");
         free(client);
@@ -210,7 +353,7 @@ SliceClient *slice_client_create(SliceMainloop *mainloop, char *host, int port, 
 
         client->connect_result_cb = connect_result_cb;
 
-        if (SliceMainloopEventAdd(mainloop, client, slice_client_add_callback, slice_client_remove_callback, err_buff) != SLICE_RETURN_NORMAL) {
+        if (SliceMainloopEventAdd(mainloop, client, slice_client_connecting_add_callback, slice_client_remove_callback, err_buff) != SLICE_RETURN_NORMAL) {
             if (err) sprintf(err, "SliceMainloopEventAdd return error [%s]", err_buff);
             close(sk);
             free(client->connection);

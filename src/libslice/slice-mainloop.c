@@ -6,7 +6,45 @@
 #include <unistd.h>
 
 #include "slice-mainloop.h"
-#include "slice-mainloop-event.h"
+
+struct slice_mainloop_epoll_element
+{
+    int fd;
+
+    struct slice_mainloop_event *slice_event;
+
+    int need_read;
+    int need_write;
+
+    SliceReturnType(*write_cb)(struct slice_mainloop_epoll*, struct slice_mainloop_epoll_element*, struct epoll_event, void*);
+    SliceReturnType(*read_cb)(struct slice_mainloop_epoll*, struct slice_mainloop_epoll_element*, struct epoll_event, void*);
+    SliceReturnType(*close_cb)(struct slice_mainloop_epoll*, struct slice_mainloop_epoll_element*, struct epoll_event, void*);
+};
+
+struct slice_mainloop
+{
+    struct slice_mainloop_event *event_list;
+    int event_list_count;
+
+    int quit;
+
+    void *user_data;
+
+    struct slice_mainloop_epoll *epoll;
+
+    SliceBuffer *buffer_bucket;
+    int buffer_bucket_count;
+
+    SliceReturnType(*init_mainloop_cb)(struct slice_mainloop *mainloop, void *user_data, char *err);
+
+    SliceReturnType(*pre_loop_cb)(struct slice_mainloop *mainloop, void *user_data, char *err);
+
+    SliceReturnType(*process_cb)(struct slice_mainloop *mainloop, void *user_data, char *err);
+
+    SliceReturnType(*post_loop_cb)(struct slice_mainloop *mainloop, void *user_data, char *err);
+
+    SliceReturnType(*finish_mainloop_cb)(struct slice_mainloop *mainloop, void *user_data, char *err);
+};
 
 SliceMainloop *slice_mainloop_create(int epoll_max_fd, int epoll_max_fetch_event, int epoll_timeout, char *err)
 {
@@ -187,6 +225,8 @@ SliceReturnType slice_mainloop_epoll_event_update(SliceMainloop *mainloop, int f
     if (element->need_write) flags |= EPOLLOUT;
     if (flags) flags |= EPOLLET;
 
+    printf("Update [%d][%d]\n", element->need_read, element->need_write);
+
     memset(&ev, 0, sizeof(ev));
     ev.data.fd = fd;
     ev.events = flags;
@@ -350,7 +390,7 @@ static int slice_mainloop_event_process_callback(SliceMainloopEpoll *epoll, Slic
     return SLICE_RETURN_NORMAL;
 }
 */
-SliceReturnType slice_mainloop_event_add(SliceMainloop *mainloop, SliceMainloopEvent *mainloop_event, int(*event_add_cb)(SliceMainloopEvent*, char*), int(*event_remove_cb)(SliceMainloopEvent*, char*), char *err)
+SliceReturnType slice_mainloop_event_add(SliceMainloop *mainloop, SliceMainloopEvent *mainloop_event, SliceReturnType(*event_add_cb)(SliceMainloopEvent*, char*), SliceReturnType(*event_remove_cb)(SliceMainloopEvent*, char*), char *err)
 {
     SliceMainloopEpollElement *element;
 
@@ -608,4 +648,133 @@ void slice_mainloop_quit(SliceMainloop *mainloop)
     if (!mainloop) return;
 
     mainloop->quit = 1;
+}
+
+struct slice_buffer *slice_mainloop_get_buffer_bucket(SliceMainloop *mainloop)
+{
+    if (!mainloop) return NULL;
+
+    return mainloop->buffer_bucket;
+}
+
+int slice_mainloop_get_buffer_bucket_count(SliceMainloop *mainloop)
+{
+    if (!mainloop) return -1;
+
+    return mainloop->buffer_bucket_count;
+}
+
+SliceReturnType slice_mainloop_buffer_bucket_add(SliceMainloop *mainloop, struct slice_buffer *buffer, char *err)
+{
+    if (!mainloop || !buffer) {
+        if (err) sprintf(err, "Invalid parameter");
+        return SLICE_RETURN_ERROR;
+    }
+
+    if (buffer->obj.next || buffer->obj.prev) {
+        if (err) sprintf(err, "Buffer is may be exist in lists");
+        return SLICE_RETURN_ERROR;
+    }
+
+    SliceListAppend(&(mainloop->buffer_bucket), buffer, NULL);
+    mainloop->buffer_bucket_count++;
+
+    return SLICE_RETURN_NORMAL;
+}
+
+SliceReturnType slice_mainloop_buffer_bucket_remove(SliceMainloop *mainloop, struct slice_buffer *buffer, char *err)
+{
+    if (!mainloop || !buffer) {
+        if (err) sprintf(err, "Invalid parameter");
+        return SLICE_RETURN_ERROR;
+    }
+
+    if (!buffer->obj.next || !buffer->obj.prev) {
+        if (err) sprintf(err, "Buffer is may be not exist in lists");
+        return SLICE_RETURN_ERROR;
+    }
+
+    SliceListRemove(&(mainloop->buffer_bucket), buffer, NULL);
+    mainloop->buffer_bucket_count--;
+
+    return SLICE_RETURN_NORMAL;
+}
+
+SliceMainloopEvent *slice_mainloop_epoll_element_get_slice_mainloop_event(SliceMainloopEpollElement *mainloop_epoll_element)
+{
+    if (!mainloop_epoll_element) return NULL;
+
+    return mainloop_epoll_element->slice_event;
+}
+
+SliceReturnType slice_mainloop_epoll_element_set_slice_mainloop_event(SliceMainloopEpollElement *mainloop_epoll_element, SliceMainloopEvent *slice_event, char *err)
+{
+    if (!mainloop_epoll_element || !slice_event) {
+        if (err) sprintf(err, "Invalid parameter");
+        return SLICE_RETURN_ERROR;
+    }
+
+    mainloop_epoll_element->slice_event = slice_event;
+
+    return SLICE_RETURN_NORMAL;
+}
+
+SliceReturnType slice_mainloop_event_set_name(SliceMainloopEvent *mainloop_event, char *name, char *err)
+{
+    if (!mainloop_event || !name) {
+        if (err) sprintf(err, "Invalid parameter");
+        return SLICE_RETURN_ERROR;
+    }
+
+    strcpy(mainloop_event->name, name);
+
+    return SLICE_RETURN_NORMAL;
+}
+
+SliceReturnType slice_mainloop_event_set_user_data(SliceMainloopEvent *mainloop_event, void *user_data, char *err)
+{
+    if (!mainloop_event) {
+        if (err) sprintf(err, "Invalid parameter");
+        return SLICE_RETURN_ERROR;
+    }
+
+    mainloop_event->user_data = user_data;
+
+    return SLICE_RETURN_NORMAL;
+}
+
+SliceReturnType slice_mainloop_event_set_callback(SliceMainloopEvent *mainloop_event, SliceMainloopCallbackEvent event_num, SliceReturnType(*ev_callback)(SliceMainloop*, SliceMainloopEvent*, char*), char *err)
+{
+    if (!mainloop_event) {
+        if (err) sprintf(err, "Invalid parameter");
+        return SLICE_RETURN_ERROR;
+    }
+
+    switch (event_num) {
+        case SLICE_MAINLOOP_EVENT_INIT:
+            mainloop_event->init_mainloop_cb = ev_callback;
+            break;
+
+        case SLICE_MAINLOOP_EVENT_PRELOOP:
+            mainloop_event->pre_mainloop_cb = ev_callback;
+            break;
+
+        case SLICE_MAINLOOP_EVENT_PROCESS:
+            mainloop_event->process_mainloop_cb = ev_callback;
+            break;
+
+        case SLICE_MAINLOOP_EVENT_POSTLOOP:
+            mainloop_event->post_mainloop_cb = ev_callback;
+            break;
+
+        case SLICE_MAINLOOP_EVENT_FINISH:
+            mainloop_event->finish_mainloop_cb = ev_callback;
+            break;
+
+        default:
+            if (err) sprintf(err, "Invalid event number [%d]", (int)event_num);
+            return SLICE_RETURN_ERROR;
+    }
+
+    return SLICE_RETURN_NORMAL;
 }

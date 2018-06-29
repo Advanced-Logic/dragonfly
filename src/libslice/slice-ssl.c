@@ -127,7 +127,7 @@ SliceSSLContext *slice_ssl_context_create(SliceSSLConnectionType type, SliceSSLM
                         SSL_CTX_free(context);
                         return NULL;
                     }
-                } else {
+                } else if (file_type == SLICE_SSL_FILE_TYPE_ASN1) {
                     if ((err_num = SSL_CTX_use_PrivateKey_file(context, ssh_key_file_path, SSL_FILETYPE_ASN1)) <= 0) {
                         if (err) sprintf(err, "Use private key file [%s] error.", ssh_key_file_path);
                         SSL_CTX_free(context);
@@ -141,7 +141,7 @@ SliceSSLContext *slice_ssl_context_create(SliceSSLConnectionType type, SliceSSLM
                         SSL_CTX_free(context);
                         return NULL;
                     }
-                } else {
+                } else if (file_type == SLICE_SSL_FILE_TYPE_ASN1) {
                     if ((err_num = SSL_CTX_use_RSAPrivateKey_file(context, rsa_key_file_path, SSL_FILETYPE_ASN1)) <= 0) {
                         if (err) sprintf(err, "Use RSA private key file [%s] error.", rsa_key_file_path);
                         SSL_CTX_free(context);
@@ -157,7 +157,7 @@ SliceSSLContext *slice_ssl_context_create(SliceSSLConnectionType type, SliceSSLM
                         SSL_CTX_free(context);
                         return NULL;
                     }
-                } else {
+                } else if (file_type == SLICE_SSL_FILE_TYPE_ASN1) {
                     if ((err_num = SSL_CTX_use_certificate_file(context, cert_file_path, SSL_FILETYPE_ASN1)) <= 0) {
                         if (err) sprintf(err, "Use certificate file [%s] error.", cert_file_path);
                         SSL_CTX_free(context);
@@ -178,7 +178,7 @@ SliceSSLContext *slice_ssl_context_create(SliceSSLConnectionType type, SliceSSLM
                     SSL_CTX_free(context);
                     return NULL;
                 }
-            } else {
+            } else if (file_type == SLICE_SSL_FILE_TYPE_ASN1) {
                 if ((err_num = SSL_CTX_use_PrivateKey_file(context, ssh_key_file_path, SSL_FILETYPE_ASN1)) <= 0) {
                     if (err) sprintf(err, "Use private key file [%s] error.", ssh_key_file_path);
                     SSL_CTX_free(context);
@@ -186,7 +186,7 @@ SliceSSLContext *slice_ssl_context_create(SliceSSLConnectionType type, SliceSSLM
                 }
             }
 
-            if (SSL_CTX_check_private_key(context) == 0) {
+            if (file_type != SLICE_SSL_FILE_TYPE_NONE && SSL_CTX_check_private_key(context) == 0) {
                 if (err) sprintf(err, "Check private key file [%s] error.", ssh_key_file_path);
                 SSL_CTX_free(context);
                 return NULL;
@@ -198,7 +198,7 @@ SliceSSLContext *slice_ssl_context_create(SliceSSLConnectionType type, SliceSSLM
                     SSL_CTX_free(context);
                     return NULL;
                 }
-            } else {
+            } else if (file_type == SLICE_SSL_FILE_TYPE_ASN1) {
                 if ((err_num = SSL_CTX_use_RSAPrivateKey_file(context, rsa_key_file_path, SSL_FILETYPE_ASN1)) <= 0) {
                     if (err) sprintf(err, "Use RSA private key file [%s] error.", rsa_key_file_path);
                     SSL_CTX_free(context);
@@ -206,7 +206,7 @@ SliceSSLContext *slice_ssl_context_create(SliceSSLConnectionType type, SliceSSLM
                 }
             }
 
-            if (SSL_CTX_check_private_key(context) == 0) {
+            if (file_type != SLICE_SSL_FILE_TYPE_NONE && SSL_CTX_check_private_key(context) == 0) {
                 if (err) sprintf(err, "Check private key file [%s] error.", rsa_key_file_path);
                 SSL_CTX_free(context);
                 return NULL;
@@ -221,6 +221,25 @@ SliceSSLContext *slice_ssl_context_create(SliceSSLConnectionType type, SliceSSLM
     SSL_CTX_set_options(context, SSL_OP_ALL);
 
     return context;
+}
+
+SliceReturnType slice_ssl_context_set_cipher_list(SliceSSLContext *context, char *cipher_list, char *err)
+{
+    if (!context || !cipher_list) {
+        if (err) sprintf(err, "Invalid parameter");
+        return SLICE_RETURN_ERROR;
+    }
+
+    if (cipher_list[0] == 0x0 || strcmp(cipher_list, "All") || strcmp(cipher_list, "ALL")) {
+        cipher_list = "ALL";
+    }
+
+    if (SSL_CTX_set_cipher_list(context, cipher_list) != 1) {
+        if (err) sprintf(err, "Cannot set cipher list [%.*s...]", 512, cipher_list);
+        return SLICE_RETURN_ERROR;
+    }
+
+    return SLICE_RETURN_NORMAL;
 }
 
 SliceReturnType slice_ssl_context_destroy(SliceSSLContext *context, char *err)

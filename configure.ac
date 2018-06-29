@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 
-AC_PREREQ(2.59)
+AC_PREREQ([2.59])
 AC_INIT([DragonFly], [1.0.0], [ninkoman@gmail.com])
 
 dnl Library version information
@@ -25,7 +25,7 @@ AC_CONFIG_HEADERS([config.h])
 
 AC_PROG_CC
 
-LT_INIT([disable-static])
+LT_INIT
 AC_SUBST([LIBTOOL_DEPS])
 AC_CONFIG_MACRO_DIRS([m4])
 
@@ -50,9 +50,9 @@ AC_FUNC_MALLOC
 AC_FUNC_REALLOC
 AC_CHECK_FUNCS([gettimeofday memchr memmove memset strerror strstr strtol strtoul sprintf printf])
 
-#PKG_CHECK_MODULES([GLIB], [glib-2.0])
-PKG_CHECK_MODULES([OPENSSL], [openssl])
-
 AC_CONFIG_FILES(Makefile src/Makefile src/libslice/Makefile src/libslice/examples/Makefile)
 AC_OUTPUT
+
+#PKG_CHECK_MODULES([GLIB], [glib-2.0])
+PKG_CHECK_MODULES([OPENSSL], [openssl])
 

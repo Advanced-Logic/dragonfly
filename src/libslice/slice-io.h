@@ -3,14 +3,14 @@
 
 #include "slice-object.h"
 
+typedef struct slice_io SliceIO;
+
 struct slice_io
 {
-    struct slice_object obj;
+    SliceObject obj;
 
     int fd;
 };
-
-typedef struct slice_io SliceIO;
 
 #ifdef __cplusplus
 extern "C" {

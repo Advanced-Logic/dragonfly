@@ -5,24 +5,28 @@
 
 #include "slice-buffer.h"
 
-SliceBuffer *slice_buffer_create(SliceMainloop *mainloop, unsigned int size, char *err)
+SliceBuffer *slice_buffer_create(struct slice_mainloop *mainloop, unsigned int size, char *err)
 {
-    SliceBuffer *buff = NULL, *tmp;
+    SliceBuffer *buff = NULL, *tmp, *buffer_bucket;
     int adj_size;
 
     if (size == 0) size = 1;
 
     adj_size = (((size - 1) / SLICE_BUFFER_BLOCK_SIZE) + 1) * SLICE_BUFFER_BLOCK_SIZE;
 
-    if (mainloop && (tmp = mainloop->buffer_bucket)) {
+    if (mainloop && (tmp = buffer_bucket = SliceMainloopGetBufferBucket(mainloop))) {
         do {
             if (tmp->size >= adj_size) break;
 
             tmp = (SliceBuffer*)tmp->obj.next;
-        } while(tmp != mainloop->buffer_bucket);
+        } while(tmp != buffer_bucket);
 
-        SliceListRemove(&(mainloop->buffer_bucket), tmp, NULL);
+        SliceMainloopBufferBucketRemove(mainloop, tmp, NULL);
         buff = tmp;
+
+        if (tmp->size < adj_size) {
+
+        }
 
         buff->length = 0;
         buff->current = 0;
@@ -41,31 +45,31 @@ SliceBuffer *slice_buffer_create(SliceMainloop *mainloop, unsigned int size, cha
     return buff;
 }
 
-SliceReturnType slice_buffer_prepare(SliceMainloop *mainloop, SliceBuffer **buff, unsigned int need_size, char *err)
+SliceReturnType slice_buffer_prepare(struct slice_mainloop *mainloop, SliceBuffer **buffer, unsigned int need_size, char *err)
 {
     SliceBuffer *new_buff;
     int adj_size;
 
-    if (!buff || need_size == 0) {
+    if (!buffer || need_size == 0) {
         if (err) sprintf(err, "Invalid parameter");
         return SLICE_RETURN_ERROR;
     }
 
-    if (!(*buff)) {
-        if (!((*buff) = slice_buffer_create(mainloop, need_size, err))) {
+    if (!(*buffer)) {
+        if (!((*buffer) = slice_buffer_create(mainloop, need_size, err))) {
             return SLICE_RETURN_ERROR;
         }
-    } else if (((*buff)->length + need_size) > (*buff)->size) {
-        if ((*buff)->obj.next || (*buff)->obj.prev) {
+    } else if (((*buffer)->length + need_size) > (*buffer)->size) {
+        if ((*buffer)->obj.next || (*buffer)->obj.prev) {
             if (err) sprintf(err, "Can't re-allocate buffer while object already in list");
             return SLICE_RETURN_ERROR;
         }
 
-        need_size += (*buff)->length;
+        need_size += (*buffer)->length;
 
         adj_size = (((need_size - 1) / SLICE_BUFFER_BLOCK_SIZE) + 1) * SLICE_BUFFER_BLOCK_SIZE;
 
-        if (!(new_buff = (SliceBuffer*)realloc((*buff), adj_size))) {
+        if (!(new_buff = (SliceBuffer*)realloc((*buffer), adj_size))) {
             if (err) sprintf(err, "Can't re-allocate buffer memory");
             return SLICE_RETURN_ERROR;
         }
@@ -73,32 +77,31 @@ SliceReturnType slice_buffer_prepare(SliceMainloop *mainloop, SliceBuffer **buff
         new_buff->data[new_buff->length] = 0;
         new_buff->size = adj_size;
 
-        (*buff) = new_buff;
+        (*buffer) = new_buff;
     }
 
     return SLICE_RETURN_NORMAL;
 }
 
-SliceReturnType slice_buffer_release(SliceMainloop *mainloop, SliceBuffer **buff, char *err)
+SliceReturnType slice_buffer_release(struct slice_mainloop *mainloop, SliceBuffer **buffer, char *err)
 {
-    if (!buff || !(*buff)) {
+    if (!buffer || !(*buffer)) {
         if (err) sprintf(err, "Invalid parameter");
         return SLICE_RETURN_ERROR;
     }
 
-    if ((*buff)->obj.next || (*buff)->obj.prev) {
+    if ((*buffer)->obj.next || (*buffer)->obj.prev) {
         if (err) sprintf(err, "Buffer steal in list");
         return SLICE_RETURN_ERROR;
     }
 
-    if (mainloop && mainloop->buffer_bucket_count < SLICE_BUFFER_BUCKET_MAX) {
-        SliceListAppend(&(mainloop->buffer_bucket), (*buff), NULL);
-        mainloop->buffer_bucket_count++;
+    if (mainloop && SliceMainloopGetBufferBucketCount(mainloop) < SLICE_BUFFER_BUCKET_MAX) {
+        SliceMainloopBufferBucketAdd(mainloop, (*buffer), NULL);
     } else {
-        free(*buff);
+        free(*buffer);
     }
 
-    (*buff) = NULL;
+    (*buffer) = NULL;
 
     return SLICE_RETURN_NORMAL;
 }

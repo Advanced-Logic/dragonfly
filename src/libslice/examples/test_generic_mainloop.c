@@ -6,53 +6,84 @@
 #include <signal.h>
 #include <unistd.h>
 
-#include "../slice-mainloop.h"
-#include "../slice-client.h"
+#include "slice-mainloop.h"
+#include "slice-client.h"
+#include "slice-ssl-client.h"
 
 SliceMainloop *mainloop = NULL;
 
-static int slice_client_read_callback(struct slice_mainloop_epoll *epoll, struct slice_mainloop_epoll_element *element, struct epoll_event ev, void *user_data)
+SliceReturnType client_read_callback(SliceClient *client, int length, void *user_data, char *err)
 {
-    SliceClient *client = user_data;
+    printf("read callback length: %d\n", length);
 
-    char buff[2048];
-    int r;
+    return 0;
+}
 
-    if ((r = recv(element->fd, buff, sizeof(buff) - 1, 0)) < 0) {
-        SliceClientRemove(client, NULL);
-        free(client);
+void client_connection_close_callback(SliceConnection *conn, void *user_data, char *error)
+{
+    SliceBuffer *buffer;
+    printf("Connection close callback\n");
+    if ((buffer = SliceConnectionGetReadBuffer(conn))) {
+        printf("Total read data[%u] [%.*s]\n", buffer->length, buffer->length, buffer->data);
+    } else {
+        printf("Connection [%p] buffer not found\n", conn);
+    }
+}
 
-        return -1;
-    } else if (r == 0) {
-        SliceClientRemove(client, NULL);
-        free(client);
+SliceReturnType connect_result_https_cb(SliceClient *client, int res, char *error)
+{
+    SliceSSLContext *ssl_ctx;
+    SliceBuffer *buffer;
+    char err_buff[SLICE_DEFAULT_ERROR_BUFF_SIZE]; err_buff[0] = 0;
 
-        if (mainloop) SliceMainloopQuit(mainloop);
+    if (res == 0) {
+        if (!(ssl_ctx = SliceSSLContextCreate(SLICE_SSL_CONNECTION_TYPE_CLIENT, SLICE_SSL_MODE_TLS_1_2, SLICE_SSL_FILE_TYPE_NONE, "", "", "", err_buff))) {
+            printf("SliceSSLContextCreate return error [%s]\n", err_buff);
+            return -1;
+        }
 
-        return -1;
+        if (SliceClientStart(client, ssl_ctx, client_read_callback, client_connection_close_callback, NULL, err_buff) != SLICE_RETURN_NORMAL) {
+            printf("SliceClientStart return error [%s]\n", err_buff);
+            return -1;
+        }
+
+        if (!(buffer = SliceBufferCreate(mainloop, 1024 * 8, err_buff))) {
+            printf("SliceBufferCreate return error [%s]\n", err_buff);
+            return -1;
+        }
+
+        buffer->length = sprintf(buffer->data, "GET / HTTP/1.1\r\nHost: www.google.com\r\nUser-Agent: Test Client\r\nConnection: close\r\n\r\n");
+
+        SliceClientWrite(client, buffer, err_buff);
+    } else {
+        printf("Connection connect error [%s]\n", error);
     }
 
-    buff[r] = 0;
-
-    printf("Recv [%s]\n", buff);
-
     return 0;
 }
 
-static int slice_client_write_callback(struct slice_mainloop_epoll *epoll, struct slice_mainloop_epoll_element *element, struct epoll_event ev, void *user_data)
+SliceReturnType connect_result_http_cb(SliceClient *client, int res, char *error)
 {
-    printf("application write callback\n");
+    SliceBuffer *buffer;
+    char err_buff[SLICE_DEFAULT_ERROR_BUFF_SIZE]; err_buff[0] = 0;
 
-    return 0;
-}
+    if (res == 0) {
+        if (SliceClientStart(client, NULL, client_read_callback, client_connection_close_callback, NULL, err_buff) != SLICE_RETURN_NORMAL) {
+            printf("SliceClientStart return error [%s]\n", err_buff);
+            return -1;
+        }
 
-int connect_result_cb(SliceClient *client, SliceConnection *conn, int res, char *err)
-{
-    SliceMainloopEpollEventSetCallback(client->mainloop_event.mainloop, client->mainloop_event.io.fd, SLICE_MAINLOOP_EPOLL_EVENT_READ, slice_client_read_callback, NULL);
-    SliceMainloopEpollEventAddRead(client->mainloop_event.mainloop, client->mainloop_event.io.fd, NULL);
+        if (!(buffer = SliceBufferCreate(mainloop, 1024 * 8, err_buff))) {
+            printf("SliceBufferCreate return error [%s]\n", err_buff);
+            return -1;
+        }
 
-    SliceMainloopEpollEventSetCallback(client->mainloop_event.mainloop, client->mainloop_event.io.fd, SLICE_MAINLOOP_EPOLL_EVENT_WRITE, slice_client_write_callback, NULL);
-    //SliceMainloopEpollEventAddWrite(client->mainloop_event.mainloop, client->mainloop_event.io.fd, NULL);
+        buffer->length = sprintf(buffer->data, "GET / HTTP/1.1\r\nHost: www.google.com\r\nUser-Agent: Test Client\r\nConnection: close\r\n\r\n");
+
+        SliceClientWrite(client, buffer, err_buff);
+    } else {
+        printf("Connection connect error [%s]\n", error);
+    }
 
     return 0;
 }
@@ -76,7 +107,16 @@ int main()
         return -1;
     }
 
-    if (!(client = SliceClientCreate(mainloop, "127.0.0.1", 5050, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_cb, err_buff))) {
+    SliceSSLLoadLibrary();
+    SliceSSLClientBucketInit(NULL);
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 443, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_https_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 80, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_http_cb, err_buff))) {
         printf("SliceClientCreate return error [%s]\n", err_buff);
         SliceMainloopDestroy(mainloop, NULL);
         return -1;
@@ -87,6 +127,8 @@ int main()
     SliceMainloopRun(mainloop, NULL);
 
     printf("mainloop exit\n");
+
+    SliceSSLClientBucketDestroy(NULL);
 
     SliceMainloopDestroy(mainloop, NULL);
 

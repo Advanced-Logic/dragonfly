@@ -7,9 +7,14 @@
 #define SLICE_BUFFER_BLOCK_SIZE             (32 * 1024)
 #define SLICE_BUFFER_BUCKET_MAX             64
 
+typedef struct slice_buffer SliceBuffer;
+
+// loop struct definetion
+struct slice_mainloop;
+
 struct slice_buffer
 {
-    struct slice_object obj;
+    SliceObject obj;
 
     unsigned int size;
     unsigned int length;
@@ -17,18 +22,13 @@ struct slice_buffer
     char data[1];
 };
 
-typedef struct slice_buffer SliceBuffer;
-
-// loop definetion
-typedef struct slice_mainloop SliceMainloop;
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-SliceBuffer *slice_buffer_create(SliceMainloop *mainloop, unsigned int size, char *err);
-SliceReturnType slice_buffer_prepare(SliceMainloop *mainloop, SliceBuffer **buff, unsigned int need_size, char *err);
-SliceReturnType slice_buffer_release(SliceMainloop *mainloop, SliceBuffer **buff, char *err);
+SliceBuffer *slice_buffer_create(struct slice_mainloop *mainloop, unsigned int size, char *err);
+SliceReturnType slice_buffer_prepare(struct slice_mainloop *mainloop, SliceBuffer **buff, unsigned int need_size, char *err);
+SliceReturnType slice_buffer_release(struct slice_mainloop *mainloop, SliceBuffer **buff, char *err);
 
 #ifdef __cplusplus
 }
