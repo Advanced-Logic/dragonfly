@@ -228,6 +228,8 @@ SliceReturnType slice_connection_socket_read(SliceConnection *conn, int *read_le
 
     mainloop_event = (SliceMainloopEvent*)conn->mainloop_event;
 
+    printf("Socket [%d] start reading\n", mainloop_event->io.fd);
+
     *read_length = 0;
 
     if (conn->type != SLICE_CONNECTION_TYPE_IP4_UDP) {
@@ -288,13 +290,7 @@ ssl_retry_read:
         if (conn->ssl_ctx) {
             if ((ret = SliceSSLClientRead(mainloop_event->io.fd, buffer->data + buffer->length, n, &r, &err_num, err_buff)) == SLICE_RETURN_ERROR) {
 #ifdef SLICE_SSL_READ_SPEED_HACK
-                if (*read_length > 0) {
-                    // error/close after read
-                    buffer->length += r;
-                    buffer->data[buffer->length] = 0;
-
-                    return SLICE_RETURN_NORMAL;
-                }
+                if (*read_length > 0) return SLICE_RETURN_NORMAL;
 #endif
                 if (err_num == 0) {
                     if (err) sprintf(err, "SliceSSLClientRead return error [%s]", err_buff);
@@ -312,15 +308,18 @@ ssl_retry_read:
             }
         } else {
             if ((r = recv(mainloop_event->io.fd, buffer->data + buffer->length, n, 0)) < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    // no data in socket buffer
+                    printf("recv wait next read\n");
+                    return SLICE_RETURN_INFO;
+                }
                 if (err) sprintf(err, "recv return error [%s]", strerror(errno));
                 if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, strerror(errno));
                 return SLICE_RETURN_ERROR;
             } else if (r == 0) {
-                if (errno != EAGAIN && errno != EWOULDBLOCK) {
-                    if (err) sprintf(err, "recv return connection closed");
-                    if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, strerror(errno));
-                    return SLICE_RETURN_ERROR;
-                }
+                if (err) sprintf(err, "recv return connection closed");
+                if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, strerror(errno));
+                return SLICE_RETURN_ERROR;
             }
         }
 
@@ -384,12 +383,17 @@ SliceReturnType slice_connection_socket_write(SliceConnection *conn, char *err)
                     }
                     if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, err_buff);
                     return SLICE_RETURN_ERROR;
-                } else if (ret == 1) {
+                } else if (ret == SLICE_RETURN_INFO) {
                     printf("SSL_client_write return need re-write again\n");
                     break;
                 }
             } else {
                 if ((r = send(mainloop_event->io.fd, buffer->data + buffer->current, n, 0)) < 0) {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                        // socket send buffer full
+                        printf("socket send buffer full\n");
+                        break;
+                    }
                     if (err) sprintf(err, "send return error [%s]", strerror(errno));
                     if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, strerror(errno));
                     return SLICE_RETURN_ERROR;

@@ -6,7 +6,7 @@
 #include "slice-io.h"
 #include "slice-buffer.h"
 
-#define SLICE_MAINLOOP_MAX_EVENT            8
+#define SLICE_MAINLOOP_MAX_EVENT            (63 * 1024)
 
 typedef struct slice_mainloop SliceMainloop;
 typedef enum slice_mainloop_callback_event SliceMainloopCallbackEvent;

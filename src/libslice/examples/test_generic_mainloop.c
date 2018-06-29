@@ -122,6 +122,138 @@ int main()
         return -1;
     }
 
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 443, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_https_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 80, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_http_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 443, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_https_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 80, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_http_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 443, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_https_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 80, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_http_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 443, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_https_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 80, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_http_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 443, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_https_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 80, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_http_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 443, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_https_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 80, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_http_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 443, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_https_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 80, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_http_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 443, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_https_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 80, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_http_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 443, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_https_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 80, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_http_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 443, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_https_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 80, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_http_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 443, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_https_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
+    if (!(client = SliceClientCreate(mainloop, "www.google.com", 80, SLICE_CONNECTION_TYPE_IP4_TCP, connect_result_http_cb, err_buff))) {
+        printf("SliceClientCreate return error [%s]\n", err_buff);
+        SliceMainloopDestroy(mainloop, NULL);
+        return -1;
+    }
+
     signal(SIGINT, interupt_signal);
 
     SliceMainloopRun(mainloop, NULL);
