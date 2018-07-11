@@ -5,9 +5,9 @@
 
 #include "slice-buffer.h"
 
-SliceBuffer *slice_buffer_create(struct slice_mainloop *mainloop, unsigned int size, char *err)
+SliceBuffer *slice_buffer_create(SliceMainloop *mainloop, unsigned int size, char *err)
 {
-    SliceBuffer *buff = NULL, *tmp, *buffer_bucket;
+    SliceBuffer *buffer = NULL, *tmp, *buffer_bucket, *new_buff;
     int adj_size;
 
     if (size == 0) size = 1;
@@ -22,30 +22,38 @@ SliceBuffer *slice_buffer_create(struct slice_mainloop *mainloop, unsigned int s
         } while(tmp != buffer_bucket);
 
         SliceMainloopBufferBucketRemove(mainloop, tmp, NULL);
-        buff = tmp;
+        buffer = tmp;
 
-        if (tmp->size < adj_size) {
+        if (buffer->size < adj_size) {
+            //printf("realloc 1 [%lu]\n", (size_t)(sizeof(SliceBuffer) + adj_size));
+            if (!(new_buff = (SliceBuffer*)realloc(buffer, (size_t)(sizeof(SliceBuffer) + adj_size)))) {
+                if (err) sprintf(err, "Can't re-allocate buffer memory");
+                free(buffer);
+                return NULL;
+            }
 
+            buffer = new_buff;
         }
 
-        buff->length = 0;
-        buff->current = 0;
-        buff->data[0] = 0;
+        buffer->length = 0;
+        buffer->current = 0;
+        buffer->data[0] = 0;
     } else {
-        if (!(buff = (SliceBuffer*)malloc(sizeof(SliceBuffer) + adj_size))) {
+        //printf("malloc [%lu]\n", (size_t)(sizeof(SliceBuffer) + adj_size));
+        if (!(buffer = (SliceBuffer*)malloc((size_t)(sizeof(SliceBuffer) + adj_size)))) {
             if (err) sprintf(err, "Can't allocate buffer memory");
             return NULL;
         }
 
-        memset(buff, 0, sizeof(SliceBuffer));
-        buff->data[0] = 0;
-        buff->size = adj_size;
+        memset(buffer, 0, sizeof(SliceBuffer));
+        buffer->data[0] = 0;
+        buffer->size = adj_size;
     }
 
-    return buff;
+    return buffer;
 }
 
-SliceReturnType slice_buffer_prepare(struct slice_mainloop *mainloop, SliceBuffer **buffer, unsigned int need_size, char *err)
+SliceReturnType slice_buffer_prepare(SliceMainloop *mainloop, SliceBuffer **buffer, unsigned int need_size, char *err)
 {
     SliceBuffer *new_buff;
     int adj_size;
@@ -69,7 +77,8 @@ SliceReturnType slice_buffer_prepare(struct slice_mainloop *mainloop, SliceBuffe
 
         adj_size = (((need_size - 1) / SLICE_BUFFER_BLOCK_SIZE) + 1) * SLICE_BUFFER_BLOCK_SIZE;
 
-        if (!(new_buff = (SliceBuffer*)realloc((*buffer), adj_size))) {
+        //printf("realloc 2 [%lu]\n", (size_t)(sizeof(SliceBuffer) + adj_size));
+        if (!(new_buff = (SliceBuffer*)realloc((*buffer), (size_t)(sizeof(SliceBuffer) + adj_size)))) {
             if (err) sprintf(err, "Can't re-allocate buffer memory");
             return SLICE_RETURN_ERROR;
         }
@@ -83,7 +92,7 @@ SliceReturnType slice_buffer_prepare(struct slice_mainloop *mainloop, SliceBuffe
     return SLICE_RETURN_NORMAL;
 }
 
-SliceReturnType slice_buffer_release(struct slice_mainloop *mainloop, SliceBuffer **buffer, char *err)
+SliceReturnType slice_buffer_release(SliceMainloop *mainloop, SliceBuffer **buffer, char *err)
 {
     if (!buffer || !(*buffer)) {
         if (err) sprintf(err, "Invalid parameter");

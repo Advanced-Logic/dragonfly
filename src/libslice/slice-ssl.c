@@ -112,7 +112,7 @@ SliceSSLContext *slice_ssl_context_create(SliceSSLConnectionType type, SliceSSLM
     }
 
     if (!(context = SSL_CTX_new(method))) {
-        if (err) sprintf(err, "Error while create new SSL Context.");
+        if (err) sprintf(err, "Error while create new SSL Context");
         return NULL;
     }
 
@@ -123,13 +123,13 @@ SliceSSLContext *slice_ssl_context_create(SliceSSLConnectionType type, SliceSSLM
             if (ssh_key_file_path && ssh_key_file_path[0] != 0) {
                 if (file_type == SLICE_SSL_FILE_TYPE_PEM) {
                     if ((err_num = SSL_CTX_use_PrivateKey_file(context, ssh_key_file_path, SSL_FILETYPE_PEM)) <= 0) {
-                        if (err) sprintf(err, "Use private key file [%s] error.", ssh_key_file_path);
+                        if (err) sprintf(err, "Use private key file [%s] error", ssh_key_file_path);
                         SSL_CTX_free(context);
                         return NULL;
                     }
                 } else if (file_type == SLICE_SSL_FILE_TYPE_ASN1) {
                     if ((err_num = SSL_CTX_use_PrivateKey_file(context, ssh_key_file_path, SSL_FILETYPE_ASN1)) <= 0) {
-                        if (err) sprintf(err, "Use private key file [%s] error.", ssh_key_file_path);
+                        if (err) sprintf(err, "Use private key file [%s] error", ssh_key_file_path);
                         SSL_CTX_free(context);
                         return NULL;
                     }
@@ -137,13 +137,13 @@ SliceSSLContext *slice_ssl_context_create(SliceSSLConnectionType type, SliceSSLM
             } else if (rsa_key_file_path && rsa_key_file_path[0] != 0) {
                 if (file_type == SLICE_SSL_FILE_TYPE_PEM) {
                     if ((err_num = SSL_CTX_use_RSAPrivateKey_file(context, rsa_key_file_path, SSL_FILETYPE_PEM)) <= 0) {
-                        if (err) sprintf(err, "Use RSA private key file [%s] error.", rsa_key_file_path);
+                        if (err) sprintf(err, "Use RSA private key file [%s] error", rsa_key_file_path);
                         SSL_CTX_free(context);
                         return NULL;
                     }
                 } else if (file_type == SLICE_SSL_FILE_TYPE_ASN1) {
                     if ((err_num = SSL_CTX_use_RSAPrivateKey_file(context, rsa_key_file_path, SSL_FILETYPE_ASN1)) <= 0) {
-                        if (err) sprintf(err, "Use RSA private key file [%s] error.", rsa_key_file_path);
+                        if (err) sprintf(err, "Use RSA private key file [%s] error", rsa_key_file_path);
                         SSL_CTX_free(context);
                         return NULL;
                     }
@@ -153,13 +153,13 @@ SliceSSLContext *slice_ssl_context_create(SliceSSLConnectionType type, SliceSSLM
             if (cert_file_path && cert_file_path[0] != 0) {
                 if (file_type == SLICE_SSL_FILE_TYPE_PEM) {
                     if ((err_num = SSL_CTX_use_certificate_file(context, cert_file_path, SSL_FILETYPE_PEM)) <= 0) {
-                        if (err) sprintf(err, "Use certificate file [%s] error.", cert_file_path);
+                        if (err) sprintf(err, "Use certificate file [%s] error", cert_file_path);
                         SSL_CTX_free(context);
                         return NULL;
                     }
                 } else if (file_type == SLICE_SSL_FILE_TYPE_ASN1) {
                     if ((err_num = SSL_CTX_use_certificate_file(context, cert_file_path, SSL_FILETYPE_ASN1)) <= 0) {
-                        if (err) sprintf(err, "Use certificate file [%s] error.", cert_file_path);
+                        if (err) sprintf(err, "Use certificate file [%s] error", cert_file_path);
                         SSL_CTX_free(context);
                         return NULL;
                     }
@@ -174,40 +174,40 @@ SliceSSLContext *slice_ssl_context_create(SliceSSLConnectionType type, SliceSSLM
         if (ssh_key_file_path && ssh_key_file_path[0] != 0) {
             if (file_type == SLICE_SSL_FILE_TYPE_PEM) {
                 if ((err_num = SSL_CTX_use_PrivateKey_file(context, ssh_key_file_path, SSL_FILETYPE_PEM)) <= 0) {
-                    if (err) sprintf(err, "Use private key file [%s] error.", ssh_key_file_path);
+                    if (err) sprintf(err, "Use private key file [%s] error", ssh_key_file_path);
                     SSL_CTX_free(context);
                     return NULL;
                 }
             } else if (file_type == SLICE_SSL_FILE_TYPE_ASN1) {
                 if ((err_num = SSL_CTX_use_PrivateKey_file(context, ssh_key_file_path, SSL_FILETYPE_ASN1)) <= 0) {
-                    if (err) sprintf(err, "Use private key file [%s] error.", ssh_key_file_path);
+                    if (err) sprintf(err, "Use private key file [%s] error", ssh_key_file_path);
                     SSL_CTX_free(context);
                     return NULL;
                 }
             }
 
             if (file_type != SLICE_SSL_FILE_TYPE_NONE && SSL_CTX_check_private_key(context) == 0) {
-                if (err) sprintf(err, "Check private key file [%s] error.", ssh_key_file_path);
+                if (err) sprintf(err, "Check private key file [%s] error", ssh_key_file_path);
                 SSL_CTX_free(context);
                 return NULL;
             }
         } else if (rsa_key_file_path && rsa_key_file_path[0] != 0) {
             if (file_type == SLICE_SSL_FILE_TYPE_PEM) {
                 if ((err_num = SSL_CTX_use_RSAPrivateKey_file(context, rsa_key_file_path, SSL_FILETYPE_PEM)) <= 0) {
-                    if (err) sprintf(err, "Use RSA private key file [%s] error.", rsa_key_file_path);
+                    if (err) sprintf(err, "Use RSA private key file [%s] error", rsa_key_file_path);
                     SSL_CTX_free(context);
                     return NULL;
                 }
             } else if (file_type == SLICE_SSL_FILE_TYPE_ASN1) {
                 if ((err_num = SSL_CTX_use_RSAPrivateKey_file(context, rsa_key_file_path, SSL_FILETYPE_ASN1)) <= 0) {
-                    if (err) sprintf(err, "Use RSA private key file [%s] error.", rsa_key_file_path);
+                    if (err) sprintf(err, "Use RSA private key file [%s] error", rsa_key_file_path);
                     SSL_CTX_free(context);
                     return NULL;
                 }
             }
 
             if (file_type != SLICE_SSL_FILE_TYPE_NONE && SSL_CTX_check_private_key(context) == 0) {
-                if (err) sprintf(err, "Check private key file [%s] error.", rsa_key_file_path);
+                if (err) sprintf(err, "Check RSA private key file [%s] error", rsa_key_file_path);
                 SSL_CTX_free(context);
                 return NULL;
             }

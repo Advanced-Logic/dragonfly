@@ -10,7 +10,7 @@
 typedef struct slice_buffer SliceBuffer;
 
 // loop struct definetion
-struct slice_mainloop;
+typedef struct slice_mainloop SliceMainloop;
 
 struct slice_buffer
 {
@@ -26,9 +26,9 @@ struct slice_buffer
 extern "C" {
 #endif
 
-SliceBuffer *slice_buffer_create(struct slice_mainloop *mainloop, unsigned int size, char *err);
-SliceReturnType slice_buffer_prepare(struct slice_mainloop *mainloop, SliceBuffer **buff, unsigned int need_size, char *err);
-SliceReturnType slice_buffer_release(struct slice_mainloop *mainloop, SliceBuffer **buff, char *err);
+SliceBuffer *slice_buffer_create(SliceMainloop *mainloop, unsigned int size, char *err);
+SliceReturnType slice_buffer_prepare(SliceMainloop *mainloop, SliceBuffer **buff, unsigned int need_size, char *err);
+SliceReturnType slice_buffer_release(SliceMainloop *mainloop, SliceBuffer **buff, char *err);
 
 #ifdef __cplusplus
 }

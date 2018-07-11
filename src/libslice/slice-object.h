@@ -3,16 +3,16 @@
 
 #include "slice.h"
 
+typedef struct slice_object SliceObject;
+
 struct slice_object
 {
-	struct slice_object *next;
-	struct slice_object *prev;
+    SliceObject *next;
+    SliceObject *prev;
 	
 	//void *user_data;
 	//int(*destroy_cb)(struct slice_object*, void*, char*);
 };
-
-typedef struct slice_object SliceObject;
 
 #ifdef __cplusplus
 extern "C" {

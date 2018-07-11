@@ -15,14 +15,22 @@ typedef struct slice_connection_ip4_tcp SliceConnectionIP4TCP;
 typedef struct slice_connection_ip6_tcp SliceConnectionIP6TCP;
 typedef struct slice_connection_ip4_udp SliceConnectionIP4UDP;
 
+typedef enum slice_connection_mode SliceConnectionMode;
 typedef enum slice_connection_type SliceConnectionType;
 
 enum slice_connection_type
 {
-    SLICE_CONNECTION_TYPE_TCP = 0,
-    SLICE_CONNECTION_TYPE_IP4_TCP,
-    SLICE_CONNECTION_TYPE_IP6_TCP,
-    SLICE_CONNECTION_TYPE_IP4_UDP
+    SLICE_CONNECTION_TYPE_CLIENT = 1,
+    SLICE_CONNECTION_TYPE_SESSION = 2,
+    SLICE_CONNECTION_TYPE_UNEXPECT = 3
+};
+
+enum slice_connection_mode
+{
+    SLICE_CONNECTION_MODE_IP4_TCP = 1,
+    SLICE_CONNECTION_MODE_IP6_TCP = 2,
+    SLICE_CONNECTION_MODE_TCP = 3,
+    SLICE_CONNECTION_MODE_IP4_UDP = 4
 };
 
 #ifdef __cplusplus
@@ -30,7 +38,7 @@ extern "C" {
 #endif
 
 SliceReturnType slice_connection_init(SliceConnection *conn, int fd, char *err);
-SliceConnection *slice_connection_create(SliceMainloopEvent *mainloop_event, int fd, SliceConnectionType type, char *err);
+SliceConnection *slice_connection_create(SliceMainloopEvent *mainloop_event, int fd, SliceConnectionMode mode, SliceConnectionType type, char *err);
 SliceReturnType slice_connection_destroy(SliceConnection *conn, char *err);
 SliceReturnType slice_connection_set_ssl_context(SliceConnection *conn, SliceSSLContext *ssl_ctx, char *err);
 SliceReturnType slice_connection_set_close_callback(SliceConnection *conn, void(*close_callback)(SliceConnection*, void*, char*), char *err);
@@ -42,13 +50,17 @@ int slice_connection_fetch_read_buffer(SliceConnection *conn, char *out, unsigne
 SliceBuffer *slice_connection_get_read_buffer(SliceConnection *conn);
 SliceReturnType slice_connection_clear_read_buffer(SliceConnection *conn, char *err);
 SliceReturnType slice_connection_write_buffer(SliceConnection *conn, SliceBuffer *buffer, char *err);
+char *slice_connection_get_peer_ip(SliceConnection *conn);
+int slice_connection_get_peer_port(SliceConnection *conn);
+struct sockaddr *slice_connection_get_peer_sockaddr(SliceConnection *conn);
+SliceMainloopEvent *slice_connection_get_mainloop_event(SliceConnection *conn);
 
 #ifdef __cplusplus
 }
 #endif
 
 #define SliceConnectionInit(_conn, _fd, _err) slice_connection_init((SliceConnection*)_conn, _fd, _err)
-#define SliceConnectionCreate(_event, _fd, _type, _err) slice_connection_create((SliceMainloopEvent*)_event, _fd, _type, _err)
+#define SliceConnectionCreate(_event, _fd, _mode, _type, _err) slice_connection_create((SliceMainloopEvent*)_event, _fd, _mode, _type, _err)
 #define SliceConnectionDestroy(_conn, _err) slice_connection_destroy(_conn, _err)
 #define SliceConnectionSetSSLContext(_conn, _ssl_ctx, _err) slice_connection_set_ssl_context(_conn, _ssl_ctx, _err)
 #define SliceConnectionSetCloseCallback(_conn, _close_callback, _err) slice_connection_set_close_callback(_conn, _close_callback, _err)
@@ -60,5 +72,9 @@ SliceReturnType slice_connection_write_buffer(SliceConnection *conn, SliceBuffer
 #define SliceConnectionGetReadBuffer(_conn) slice_connection_get_read_buffer(_conn)
 #define SliceConnectionClearReadBuffer(_conn, _err) slice_connection_clear_read_buffer(_conn, _err)
 #define SliceConnectionWriteBuffer(_conn, _buffer, _err) slice_connection_write_buffer(_conn, _buffer, _err)
+#define SliceConnectionGetPeerIP(_conn) slice_connection_get_peer_ip(_conn)
+#define SliceConnectionGetPeerPort(_conn) slice_connection_get_peer_port(_conn)
+#define SliceConnectionGetPeerSockAddr(_conn) slice_connection_get_peer_sockaddr(_conn)
+#define SliceConnectionGetMainloopEvent(_conn) slice_connection_get_mainloop_event(_conn)
 
 #endif

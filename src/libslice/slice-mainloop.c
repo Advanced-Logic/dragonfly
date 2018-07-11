@@ -7,43 +7,55 @@
 
 #include "slice-mainloop.h"
 
+struct slice_mainloop_epoll
+{
+    int epoll_fd;
+
+    int timeout;
+    int max_fetch_event;
+    int max_fd;
+
+    struct epoll_event *event_bucket;
+    SliceMainloopEpollElement *element_table;
+};
+
 struct slice_mainloop_epoll_element
 {
     int fd;
 
-    struct slice_mainloop_event *slice_event;
+    SliceMainloopEvent *slice_event;
 
     int need_read;
     int need_write;
 
-    SliceReturnType(*write_cb)(struct slice_mainloop_epoll*, struct slice_mainloop_epoll_element*, struct epoll_event, void*);
-    SliceReturnType(*read_cb)(struct slice_mainloop_epoll*, struct slice_mainloop_epoll_element*, struct epoll_event, void*);
-    SliceReturnType(*close_cb)(struct slice_mainloop_epoll*, struct slice_mainloop_epoll_element*, struct epoll_event, void*);
+    SliceReturnType(*write_cb)(SliceMainloopEpoll*, SliceMainloopEpollElement*, struct epoll_event, void*);
+    SliceReturnType(*read_cb)(SliceMainloopEpoll*, SliceMainloopEpollElement*, struct epoll_event, void*);
+    SliceReturnType(*close_cb)(SliceMainloopEpoll*, SliceMainloopEpollElement*, struct epoll_event, void*);
 };
 
 struct slice_mainloop
 {
-    struct slice_mainloop_event *event_list;
+    SliceMainloopEvent *event_list;
     int event_list_count;
 
     int quit;
 
     void *user_data;
 
-    struct slice_mainloop_epoll *epoll;
+    SliceMainloopEpoll *epoll;
 
     SliceBuffer *buffer_bucket;
     int buffer_bucket_count;
 
-    SliceReturnType(*init_mainloop_cb)(struct slice_mainloop *mainloop, void *user_data, char *err);
+    SliceReturnType(*init_mainloop_cb)(SliceMainloop *mainloop, void *user_data, char *err);
 
-    SliceReturnType(*pre_loop_cb)(struct slice_mainloop *mainloop, void *user_data, char *err);
+    SliceReturnType(*pre_loop_cb)(SliceMainloop *mainloop, void *user_data, char *err);
 
-    SliceReturnType(*process_cb)(struct slice_mainloop *mainloop, void *user_data, char *err);
+    SliceReturnType(*process_cb)(SliceMainloop *mainloop, void *user_data, char *err);
 
-    SliceReturnType(*post_loop_cb)(struct slice_mainloop *mainloop, void *user_data, char *err);
+    SliceReturnType(*post_loop_cb)(SliceMainloop *mainloop, void *user_data, char *err);
 
-    SliceReturnType(*finish_mainloop_cb)(struct slice_mainloop *mainloop, void *user_data, char *err);
+    SliceReturnType(*finish_mainloop_cb)(SliceMainloop *mainloop, void *user_data, char *err);
 };
 
 SliceMainloop *slice_mainloop_create(int epoll_max_fd, int epoll_max_fetch_event, int epoll_timeout, char *err)
@@ -225,7 +237,7 @@ SliceReturnType slice_mainloop_epoll_event_update(SliceMainloop *mainloop, int f
     if (element->need_write) flags |= EPOLLOUT;
     if (flags) flags |= EPOLLET;
 
-    printf("Update [%d][%d]\n", element->need_read, element->need_write);
+    //printf("Update [%d][%d]\n", element->need_read, element->need_write);
 
     memset(&ev, 0, sizeof(ev));
     ev.data.fd = fd;
@@ -664,7 +676,7 @@ int slice_mainloop_get_buffer_bucket_count(SliceMainloop *mainloop)
     return mainloop->buffer_bucket_count;
 }
 
-SliceReturnType slice_mainloop_buffer_bucket_add(SliceMainloop *mainloop, struct slice_buffer *buffer, char *err)
+SliceReturnType slice_mainloop_buffer_bucket_add(SliceMainloop *mainloop, SliceBuffer *buffer, char *err)
 {
     if (!mainloop || !buffer) {
         if (err) sprintf(err, "Invalid parameter");
@@ -682,7 +694,7 @@ SliceReturnType slice_mainloop_buffer_bucket_add(SliceMainloop *mainloop, struct
     return SLICE_RETURN_NORMAL;
 }
 
-SliceReturnType slice_mainloop_buffer_bucket_remove(SliceMainloop *mainloop, struct slice_buffer *buffer, char *err)
+SliceReturnType slice_mainloop_buffer_bucket_remove(SliceMainloop *mainloop, SliceBuffer *buffer, char *err)
 {
     if (!mainloop || !buffer) {
         if (err) sprintf(err, "Invalid parameter");
@@ -707,14 +719,14 @@ SliceMainloopEvent *slice_mainloop_epoll_element_get_slice_mainloop_event(SliceM
     return mainloop_epoll_element->slice_event;
 }
 
-SliceReturnType slice_mainloop_epoll_element_set_slice_mainloop_event(SliceMainloopEpollElement *mainloop_epoll_element, SliceMainloopEvent *slice_event, char *err)
+SliceReturnType slice_mainloop_epoll_element_set_slice_mainloop_event(SliceMainloopEpollElement *mainloop_epoll_element, SliceMainloopEvent *mainloop_event, char *err)
 {
-    if (!mainloop_epoll_element || !slice_event) {
+    if (!mainloop_epoll_element || !mainloop_event) {
         if (err) sprintf(err, "Invalid parameter");
         return SLICE_RETURN_ERROR;
     }
 
-    mainloop_epoll_element->slice_event = slice_event;
+    mainloop_epoll_element->slice_event = mainloop_event;
 
     return SLICE_RETURN_NORMAL;
 }

@@ -73,3 +73,10 @@ int slice_io_write(SliceIO *io, void *buffer, unsigned int buffer_size, char *er
 
     return r;
 }
+
+int slice_io_get_fd(SliceIO *io)
+{
+    if (!io) return -1;
+
+    return io->fd;
+}

@@ -3,22 +3,13 @@
 
 #include "slice-ssl.h"
 
-#define MAX_SSL_CLIENT_CONTEXT_BUCKET           (64 * 1024)
-
-struct slice_ssl_clnt_context
-{
-    int sock;
-    SSL *ssl;
-    SliceSSLState state;
-};
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 SliceReturnType slice_SSL_client_bucket_init(char *err);
 SliceReturnType slice_SSL_client_bucket_destroy(char *err);
-SliceReturnType slice_SSL_client_connect(int sockfd, SSL_CTX *context, char *err);
+SliceReturnType slice_SSL_client_connect(int sockfd, SliceSSLContext *context, char *err);
 SliceReturnType slice_SSL_client_shutdown(int sockfd, char *err);
 SliceReturnType slice_SSL_client_read(int sockfd, void *read_buff, size_t buff_len, int *read_len, int *err_num, char *err);
 SliceReturnType slice_SSL_client_write(int sockfd, void *write_buff, size_t write_size, int *write_len, int *err_num, char *err);

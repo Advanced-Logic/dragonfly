@@ -9,6 +9,7 @@
 
 #include "slice-connection.h"
 #include "slice-ssl-client.h"
+#include "slice-ssl-server.h"
 
 struct slice_connection_ip4_tcp
 {
@@ -28,28 +29,40 @@ struct slice_connection_ip6_tcp
 
 struct slice_connection_ip4_udp
 {
+    struct sockaddr_in peer_addr;
+
+    char peer_ip[16];
+    int peer_port;
+};
+
+struct slice_connection_ip6_udp
+{
     struct sockaddr_storage peer_addr;
+
+    char peer_ip[64];
+    int peer_port;
 };
 
 struct slice_connection
 {
-    struct slice_mainloop_event *mainloop_event;
+    SliceMainloopEvent *mainloop_event;
 
-    enum slice_connection_type type;
+    SliceConnectionMode mode;
+    SliceConnectionType type;
 
     union
     {
-        struct slice_connection_ip4_tcp ip4_tcp;
-        struct slice_connection_ip6_tcp ip6_tcp;
+        SliceConnectionIP4TCP ip4_tcp;
+        SliceConnectionIP6TCP ip6_tcp;
 
-        struct slice_connection_ip4_udp ip4_udp;
+        SliceConnectionIP4UDP ip4_udp;
     } args;
 
     SliceBuffer *read_buffer;
     SliceBuffer *write_buffer;
 
     SliceSSLContext *ssl_ctx;
-    void(*close_callback)(struct slice_connection*, void*, char*);
+    void(*close_callback)(SliceConnection*, void*, char*);
 };
 
 
@@ -82,7 +95,7 @@ SliceReturnType slice_connection_set_ssl_context(SliceConnection *conn, SliceSSL
         return SLICE_RETURN_ERROR;
     }
 
-    if (conn->type == SLICE_CONNECTION_TYPE_IP4_UDP) {
+    if (conn->mode == SLICE_CONNECTION_MODE_IP4_UDP) {
         if (err) sprintf(err, "SSL on UDP is not implemetented");
         return SLICE_RETURN_ERROR;
     }
@@ -109,7 +122,7 @@ SliceReturnType slice_connection_set_close_callback(SliceConnection *conn, void(
     return SLICE_RETURN_NORMAL;
 }
 
-SliceConnection *slice_connection_create(SliceMainloopEvent *mainloop_event, int fd, SliceConnectionType type, char *err)
+SliceConnection *slice_connection_create(SliceMainloopEvent *mainloop_event, int fd, SliceConnectionMode mode, SliceConnectionType type, char *err)
 {
     SliceConnection *conn;
     socklen_t addr_len;
@@ -128,7 +141,7 @@ SliceConnection *slice_connection_create(SliceMainloopEvent *mainloop_event, int
 
     memset(conn, 0, sizeof(SliceConnection));
 
-    if (type == SLICE_CONNECTION_TYPE_IP4_TCP) {
+    if (mode == SLICE_CONNECTION_MODE_IP4_TCP) {
         addr_len = sizeof(conn->args.ip4_tcp.peer_addr);
 
         if (getpeername(fd, (struct sockaddr*)&(conn->args.ip4_tcp.peer_addr), &addr_len) != 0) {
@@ -137,13 +150,13 @@ SliceConnection *slice_connection_create(SliceMainloopEvent *mainloop_event, int
             return NULL;
         }
 
-        if (inet_ntop(AF_INET, &(conn->args.ip4_tcp.peer_addr.sin_addr), conn->args.ip4_tcp.peer_ip, INET_ADDRSTRLEN)) {
+        if (inet_ntop(AF_INET, &(conn->args.ip4_tcp.peer_addr.sin_addr), conn->args.ip4_tcp.peer_ip, sizeof(conn->args.ip4_tcp.peer_ip))) {
             conn->args.ip4_tcp.peer_port = conn->args.ip4_tcp.peer_addr.sin_port;
         } else {
             conn->args.ip4_tcp.peer_ip[0] = 0;
             conn->args.ip4_tcp.peer_port = 0;
         }
-    } else if (type == SLICE_CONNECTION_TYPE_IP6_TCP) {
+    } else if (mode == SLICE_CONNECTION_MODE_IP6_TCP) {
         addr_len = sizeof(conn->args.ip6_tcp.peer_addr);
 
         if (getpeername(fd, (struct sockaddr*)&(conn->args.ip6_tcp.peer_addr), &addr_len) != 0) {
@@ -152,18 +165,18 @@ SliceConnection *slice_connection_create(SliceMainloopEvent *mainloop_event, int
             return NULL;
         }
 
-        if (inet_ntop(AF_INET6, &(conn->args.ip6_tcp.peer_addr.sin6_addr), conn->args.ip6_tcp.peer_ip, INET_ADDRSTRLEN)) {
+        if (inet_ntop(AF_INET6, &(conn->args.ip6_tcp.peer_addr.sin6_addr), conn->args.ip6_tcp.peer_ip, sizeof(conn->args.ip6_tcp.peer_ip))) {
             conn->args.ip6_tcp.peer_port = conn->args.ip6_tcp.peer_addr.sin6_port;
         } else {
             conn->args.ip6_tcp.peer_ip[0] = 0;
             conn->args.ip6_tcp.peer_port = 0;
         }
-    } else if (type == SLICE_CONNECTION_TYPE_IP4_UDP) {
-        if (err) sprintf(err, "Connection type [%d] not implement yet", (int)type);
+    } else if (mode == SLICE_CONNECTION_MODE_IP4_UDP) {
+        if (err) sprintf(err, "Connection mode [%d] not implement yet", (int)mode);
         free(conn);
         return NULL;
     } else {
-        if (err) sprintf(err, "Connection type [%d] is invalid", (int)type);
+        if (err) sprintf(err, "Connection mode [%d] is invalid", (int)mode);
         free(conn);
         return NULL;
     }
@@ -174,8 +187,9 @@ SliceConnection *slice_connection_create(SliceMainloopEvent *mainloop_event, int
         return NULL;
     }
     
-    mainloop_event->io.fd = fd;
+    SliceIOInit(mainloop_event, fd, NULL);
     conn->mainloop_event = mainloop_event;
+    conn->mode = mode;
     conn->type = type;
 
     return conn;
@@ -201,7 +215,14 @@ SliceReturnType slice_connection_destroy(SliceConnection *conn, char *err)
     }
 
     if (conn->ssl_ctx) {
-        SliceSSLClientShutdown(conn->mainloop_event->io.fd, NULL);
+        // check client or session
+        if (conn->type == SLICE_CONNECTION_TYPE_CLIENT) {
+            SliceSSLClientShutdown(conn->mainloop_event->io.fd, NULL);
+            SliceSSLContextDestroy(conn->ssl_ctx, NULL);
+        } else {
+            SliceSSLSessionClose(conn->mainloop_event->io.fd, NULL);
+        }
+        
         conn->ssl_ctx = NULL;
     }
 
@@ -228,33 +249,34 @@ SliceReturnType slice_connection_socket_read(SliceConnection *conn, int *read_le
 
     mainloop_event = (SliceMainloopEvent*)conn->mainloop_event;
 
-    printf("Socket [%d] start reading\n", mainloop_event->io.fd);
-
     *read_length = 0;
 
-    if (conn->type != SLICE_CONNECTION_TYPE_IP4_UDP) {
-        if (conn->ssl_ctx && SliceSSLClientGetState(mainloop_event->io.fd) != SLICE_SSL_STATE_CONNECTED) {
-            if ((r = SliceSSLClientConnect(mainloop_event->io.fd, conn->ssl_ctx, err_buff)) == 1) {
-                printf("SliceSSLClientConnect read return continue initial\n");
+    if ((conn->mode & SLICE_CONNECTION_MODE_TCP) && conn->ssl_ctx) {
+        if (conn->type == SLICE_CONNECTION_TYPE_CLIENT && SliceSSLClientGetState(mainloop_event->io.fd) != SLICE_SSL_STATE_CONNECTED) {
+            if ((r = SliceSSLClientConnect(mainloop_event->io.fd, conn->ssl_ctx, err_buff)) == SLICE_RETURN_INFO) {
                 return SLICE_RETURN_INFO;
-            } else if (r != 0) {
+            } else if (r != SLICE_RETURN_NORMAL) {
                 if (err) sprintf(err, "SliceSSLClientConnect return error [%s]", err_buff);
                 if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, err_buff);
                 return SLICE_RETURN_ERROR;
             }
 
-            if (SliceSSLClientGetState(mainloop_event->io.fd) != SLICE_SSL_STATE_CONNECTED) {
-                printf("Return while SSL connecting\n");
+            if (SliceSSLClientGetState(mainloop_event->io.fd) != SLICE_SSL_STATE_CONNECTED) return SLICE_RETURN_INFO;
+        } else if (conn->type == SLICE_CONNECTION_TYPE_SESSION && SliceSSLSessionGetState(mainloop_event->io.fd) != SLICE_SSL_STATE_CONNECTED) {
+            if ((r = SliceSSLSessionAccept(mainloop_event->io.fd, conn->ssl_ctx, err_buff)) == SLICE_RETURN_INFO) {
                 return SLICE_RETURN_INFO;
-            } else {
-                if (err) sprintf(err, "SSL connected [%p]", conn->write_buffer);
+            } else if (r != SLICE_RETURN_NORMAL) {
+                if (err) sprintf(err, "SliceSSLSessionAccept return error [%s]", err_buff);
+                if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, err_buff);
+                return SLICE_RETURN_ERROR;
             }
 
-            if (conn->write_buffer) {
-                printf("Add write while SSL connected and write buffer exists\n");
-                SliceMainloopEpollEventAddWrite(mainloop_event->mainloop, mainloop_event->io.fd, NULL);
-            }
+            if (SliceSSLSessionGetState(mainloop_event->io.fd) != SLICE_SSL_STATE_CONNECTED) return SLICE_RETURN_INFO;
         }
+
+        if (err) sprintf(err, "SSL connected, write buffer [%p]", conn->write_buffer);
+
+        if (conn->write_buffer) SliceMainloopEpollEventAddWrite(mainloop_event->mainloop, mainloop_event->io.fd, NULL);
     }
 
     if (!(buffer = conn->read_buffer)) {
@@ -284,33 +306,51 @@ ssl_retry_read:
         n = buffer->size - buffer->length;
     }
 
-    printf("Reading buffer size [%d]\n", n);
-
-    if (conn->type != SLICE_CONNECTION_TYPE_IP4_UDP) {
+    if (conn->mode & SLICE_CONNECTION_MODE_TCP) {
         if (conn->ssl_ctx) {
-            if ((ret = SliceSSLClientRead(mainloop_event->io.fd, buffer->data + buffer->length, n, &r, &err_num, err_buff)) == SLICE_RETURN_ERROR) {
+            if (conn->type == SLICE_CONNECTION_TYPE_CLIENT) {
+                if ((ret = SliceSSLClientRead(mainloop_event->io.fd, buffer->data + buffer->length, n, &r, &err_num, err_buff)) == SLICE_RETURN_ERROR) {
 #ifdef SLICE_SSL_READ_SPEED_HACK
-                if (*read_length > 0) return SLICE_RETURN_NORMAL;
+                    if (*read_length > 0) return SLICE_RETURN_NORMAL;
 #endif
-                if (err_num == 0) {
-                    if (err) sprintf(err, "SliceSSLClientRead return error [%s]", err_buff);
-                } else {
-                    if (err) sprintf(err, "SliceSSLClientRead system call [%s]", err_buff);
+                    if (err_num == 0) {
+                        if (err) sprintf(err, "SliceSSLClientRead return error [%s]", err_buff);
+                    } else {
+                        if (err) sprintf(err, "SliceSSLClientRead system call [%s]", err_buff);
+                    }
+
+                    if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, err_buff);
+
+                    return SLICE_RETURN_ERROR;
                 }
-                if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, err_buff);
-                return SLICE_RETURN_ERROR;
-            } else if (ret == SLICE_RETURN_INFO) {
+            } else {
+                if ((ret = SliceSSLSessionRead(mainloop_event->io.fd, buffer->data + buffer->length, n, &r, &err_num, err_buff)) == SLICE_RETURN_ERROR) {
+#ifdef SLICE_SSL_READ_SPEED_HACK
+                    if (*read_length > 0) return SLICE_RETURN_NORMAL;
+#endif
+                    if (err_num == 0) {
+                        if (err) sprintf(err, "SliceSSLSessionRead return error [%s]", err_buff);
+                    } else {
+                        if (err) sprintf(err, "SliceSSLSessionRead system call [%s]", err_buff);
+                    }
+
+                    if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, err_buff);
+
+                    return SLICE_RETURN_ERROR;
+                }
+            }
+
+            if (ret == SLICE_RETURN_INFO) {
 #ifdef SLICE_SSL_READ_SPEED_HACK
                 if (*read_length > 0) return SLICE_RETURN_NORMAL;
 #endif
-                printf("SliceSSLClientRead wait next read\n");
                 return SLICE_RETURN_INFO;
             }
         } else {
             if ((r = recv(mainloop_event->io.fd, buffer->data + buffer->length, n, 0)) < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     // no data in socket buffer
-                    printf("recv wait next read\n");
+                    //printf("recv wait next read\n");
                     return SLICE_RETURN_INFO;
                 }
                 if (err) sprintf(err, "recv return error [%s]", strerror(errno));
@@ -351,10 +391,9 @@ SliceReturnType slice_connection_socket_write(SliceConnection *conn, char *err)
 
     mainloop_event = (SliceMainloopEvent*)conn->mainloop_event;
 
-    if (conn->type != SLICE_CONNECTION_TYPE_IP4_UDP) {
+    if (conn->mode & SLICE_CONNECTION_MODE_TCP) {
         if (conn->ssl_ctx && SliceSSLClientGetState(mainloop_event->io.fd) != SLICE_SSL_STATE_CONNECTED) {
             if ((r = SliceSSLClientConnect(mainloop_event->io.fd, conn->ssl_ctx, err_buff)) == 1) {
-                printf("SliceSSLClientConnect write return continue initial\n");
                 return SLICE_RETURN_INFO;
             } else if (r != 0) {
                 if (err) sprintf(err, "SliceSSLClientConnect return error [%s]", err_buff);
@@ -366,41 +405,66 @@ SliceReturnType slice_connection_socket_write(SliceConnection *conn, char *err)
         }
     }
 
-    printf("Write XXXXX [%p]\n", conn->write_buffer);
-
     while ((buffer = conn->write_buffer)) {
         n = buffer->length - buffer->current;
 
-        printf("Writing [%d][%.*s]\n", buffer->length, buffer->length, buffer->data);
+        //printf("Trying write [%d][%.*s]\n", buffer->length, buffer->length, buffer->data);
+        //printf("Trying write [%p][%d]\n", buffer, buffer->length);
 
         if (n > 0) {
-            if (conn->ssl_ctx) {
-                if ((ret = SliceSSLClientWrite(mainloop_event->io.fd, buffer->data + buffer->current, n, &r, &err_num, err_buff)) == SLICE_RETURN_ERROR) {
-                    if (err_num == 0) {
-                        if (err) sprintf(err, "SliceSSLClientWrite return error [%s]", err_buff);
+            if (conn->mode & SLICE_CONNECTION_MODE_TCP) {
+                if (conn->ssl_ctx) {
+                    if (conn->type == SLICE_CONNECTION_TYPE_CLIENT) {
+                        if ((ret = SliceSSLClientWrite(mainloop_event->io.fd, buffer->data + buffer->current, n, &r, &err_num, err_buff)) == SLICE_RETURN_ERROR) {
+                            if (err_num == 0) {
+                                if (err) sprintf(err, "SliceSSLClientWrite return error [%s]", err_buff);
+                            } else {
+                                if (err) sprintf(err, "SliceSSLClientWrite system call [%s]", err_buff);
+                            }
+
+                            if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, err_buff);
+
+                            return SLICE_RETURN_ERROR;
+                        }
                     } else {
-                        if (err) sprintf(err, "SliceSSLClientWrite system call [%s]", err_buff);
+                        if ((ret = SliceSSLSessionWrite(mainloop_event->io.fd, buffer->data + buffer->current, n, &r, &err_num, err_buff)) == SLICE_RETURN_ERROR) {
+                            if (err_num == 0) {
+                                if (err) sprintf(err, "SliceSSLSessionWrite return error [%s]", err_buff);
+                            } else {
+                                if (err) sprintf(err, "SliceSSLSessionWrite system call [%s]", err_buff);
+                            }
+
+                            if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, err_buff);
+
+                            return SLICE_RETURN_ERROR;
+                        }
                     }
-                    if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, err_buff);
-                    return SLICE_RETURN_ERROR;
-                } else if (ret == SLICE_RETURN_INFO) {
-                    printf("SSL_client_write return need re-write again\n");
-                    break;
-                }
-            } else {
-                if ((r = send(mainloop_event->io.fd, buffer->data + buffer->current, n, 0)) < 0) {
-                    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                        // socket send buffer full
-                        printf("socket send buffer full\n");
+
+                    if (ret == SLICE_RETURN_INFO) {
+                        printf("SSL_XXX_write return need re-write again\n");
                         break;
                     }
-                    if (err) sprintf(err, "send return error [%s]", strerror(errno));
-                    if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, strerror(errno));
-                    return SLICE_RETURN_ERROR;
-                } else if (r == 0) {
-                    // write buffer full or disconnected
-                    break;
+                } else {
+                    if ((r = send(mainloop_event->io.fd, buffer->data + buffer->current, n, 0)) < 0) {
+                        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                            // socket send buffer full
+                            printf("socket send buffer full\n");
+                            break;
+                        }
+                        if (err) sprintf(err, "send return error [%s]", strerror(errno));
+                        if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, strerror(errno));
+                        return SLICE_RETURN_ERROR;
+                    }
                 }
+            } else {
+                if (err) sprintf(err, "UDP not implement yet");
+                if (conn->close_callback) conn->close_callback(conn, mainloop_event->user_data, "UDP is not implmented");
+                return SLICE_RETURN_ERROR;
+            }
+
+            if (r == 0) {
+                // write buffer full or disconnected
+                break;
             }
 
             buffer->current += r;
@@ -415,9 +479,7 @@ SliceReturnType slice_connection_socket_write(SliceConnection *conn, char *err)
         }
     }
 
-    if (conn->write_buffer) {
-        SliceMainloopEpollEventAddWrite(mainloop_event->mainloop, mainloop_event->io.fd, NULL);
-    }
+    if (conn->write_buffer) SliceMainloopEpollEventAddWrite(mainloop_event->mainloop, mainloop_event->io.fd, NULL);
 
     return SLICE_RETURN_NORMAL;
 }
@@ -535,4 +597,33 @@ SliceReturnType slice_connection_write_buffer(SliceConnection *conn, SliceBuffer
     SliceListAppend(&(conn->write_buffer), buffer, NULL);
 
     return SLICE_RETURN_NORMAL;
+}
+
+char *slice_connection_get_peer_ip(SliceConnection *conn)
+{
+    if (!conn) return "";
+
+    return (conn->mode == SLICE_CONNECTION_MODE_IP4_TCP) ? conn->args.ip4_tcp.peer_ip : (conn->mode == SLICE_CONNECTION_MODE_IP6_TCP) ? conn->args.ip6_tcp.peer_ip : conn->args.ip4_udp.peer_ip;
+}
+
+int slice_connection_get_peer_port(SliceConnection *conn)
+{
+    if (!conn) return -1;
+
+
+    return (conn->mode == SLICE_CONNECTION_MODE_IP4_TCP) ? conn->args.ip4_tcp.peer_port : (conn->mode == SLICE_CONNECTION_MODE_IP6_TCP) ? conn->args.ip6_tcp.peer_port : conn->args.ip4_udp.peer_port;
+}
+
+struct sockaddr *slice_connection_get_peer_sockaddr(SliceConnection *conn)
+{
+    if (!conn) return NULL;
+
+    return (conn->mode == SLICE_CONNECTION_MODE_IP4_TCP) ? (struct sockaddr*)&(conn->args.ip4_tcp.peer_addr) : (conn->mode == SLICE_CONNECTION_MODE_IP6_TCP) ? (struct sockaddr*)&(conn->args.ip6_tcp.peer_addr) : (struct sockaddr*)&(conn->args.ip4_udp.peer_addr);
+}
+
+SliceMainloopEvent *slice_connection_get_mainloop_event(SliceConnection *conn)
+{
+    if (!conn) return NULL;
+
+    return conn->mainloop_event;
 }

@@ -17,7 +17,7 @@ typedef struct slice_mainloop_epoll SliceMainloopEpoll;
 typedef struct slice_mainloop_epoll_element SliceMainloopEpollElement;
 
 // loop struct definetion
-struct slice_buffer;
+typedef struct slice_buffer SliceBuffer;
 
 enum slice_mainloop_callback_event
 {
@@ -35,41 +35,29 @@ enum slice_mainloop_epoll_event_callback
     SLICE_MAINLOOP_EPOLL_EVENT_CLOSE
 };
 
-struct slice_mainloop_epoll
-{
-    int epoll_fd;
-    
-    int timeout;
-    int max_fetch_event;
-    int max_fd;
-
-    struct epoll_event *event_bucket;
-    struct slice_mainloop_epoll_element *element_table;
-};
-
 struct slice_mainloop_event
 {
     struct slice_io io;
 
     char name[128];
 
-    struct slice_mainloop *mainloop;
+    SliceMainloop *mainloop;
 
     void *user_data;
 
     int destroyed;
 
-    int(*remove_cb)(struct slice_mainloop_event *mainloop_event, char *err);
+    int(*remove_cb)(SliceMainloopEvent *mainloop_event, char *err);
 
-    int(*init_mainloop_cb)(struct slice_mainloop *mainloop, struct slice_mainloop_event *mainloop_event, char *err);
+    int(*init_mainloop_cb)(SliceMainloop *mainloop, SliceMainloopEvent *mainloop_event, char *err);
 
-    int(*pre_mainloop_cb)(struct slice_mainloop *mainloop, struct slice_mainloop_event *mainloop_event, char *err);
+    int(*pre_mainloop_cb)(SliceMainloop *mainloop, SliceMainloopEvent *mainloop_event, char *err);
 
-    int(*process_mainloop_cb)(struct slice_mainloop *mainloop, struct slice_mainloop_event *mainloop_event, char *err);
+    int(*process_mainloop_cb)(SliceMainloop *mainloop, SliceMainloopEvent *mainloop_event, char *err);
 
-    int(*post_mainloop_cb)(struct slice_mainloop *mainloop, struct slice_mainloop_event *mainloop_event, char *err);
+    int(*post_mainloop_cb)(SliceMainloop *mainloop, SliceMainloopEvent *mainloop_event, char *err);
 
-    int(*finish_mainloop_cb)(struct slice_mainloop *mainloop, struct slice_mainloop_event *mainloop_event, char *err);
+    int(*finish_mainloop_cb)(SliceMainloop *mainloop, SliceMainloopEvent *mainloop_event, char *err);
 };
 
 #ifdef __cplusplus
@@ -78,16 +66,16 @@ extern "C" {
 
 SliceMainloop *slice_mainloop_create(int epoll_max_fd, int epoll_max_fetch_event, int epoll_timeout, char *err);
 SliceReturnType slice_mainloop_destroy(SliceMainloop *mainloop, char *err);
-SliceReturnType slice_mainloop_event_add(SliceMainloop *mainloop, SliceMainloopEvent *event, SliceReturnType(*event_add_cb)(SliceMainloopEvent*, char*), SliceReturnType(*event_remove_cb)(SliceMainloopEvent*, char*), char *err);
-SliceReturnType slice_mainloop_event_remove(SliceMainloop *mainloop, SliceMainloopEvent *event, char *err);
+SliceReturnType slice_mainloop_event_add(SliceMainloop *mainloop, SliceMainloopEvent *mainloop_event, SliceReturnType(*event_add_cb)(SliceMainloopEvent*, char*), SliceReturnType(*event_remove_cb)(SliceMainloopEvent*, char*), char *err);
+SliceReturnType slice_mainloop_event_remove(SliceMainloop *mainloop, SliceMainloopEvent *mainloop_event, char *err);
 SliceReturnType slice_mainloop_set_user_data(SliceMainloop *mainloop, void *user_data, char *err);
 SliceReturnType slice_mainloop_set_callback(SliceMainloop *mainloop, SliceMainloopCallbackEvent event_num, int(*ev_callback)(SliceMainloop*, void*, char*), char *err);
 SliceReturnType slice_mainloop_run(SliceMainloop *mainloop, char *err);
 void slice_mainloop_quit(SliceMainloop *mainloop);
-struct slice_buffer *slice_mainloop_get_buffer_bucket(SliceMainloop *mainloop);
+SliceBuffer *slice_mainloop_get_buffer_bucket(SliceMainloop *mainloop);
 int slice_mainloop_get_buffer_bucket_count(SliceMainloop *mainloop);
-SliceReturnType slice_mainloop_buffer_bucket_add(SliceMainloop *mainloop, struct slice_buffer *buffer, char *err);
-SliceReturnType slice_mainloop_buffer_bucket_remove(SliceMainloop *mainloop, struct slice_buffer *buffer, char *err);
+SliceReturnType slice_mainloop_buffer_bucket_add(SliceMainloop *mainloop, SliceBuffer *buffer, char *err);
+SliceReturnType slice_mainloop_buffer_bucket_remove(SliceMainloop *mainloop, SliceBuffer *buffer, char *err);
 
 SliceMainloopEpollElement *slice_mainloop_epoll_get_event_element(SliceMainloop *mainloop, int fd, char *err);
 SliceReturnType slice_mainloop_epoll_set_callback(SliceMainloop *mainloop, int fd, SliceMainloopEpollEventCallback flag, void *callback, char *err);
