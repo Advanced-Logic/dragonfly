@@ -611,15 +611,15 @@ SliceReturnType slice_mainloop_run(SliceMainloop *mainloop, char *err)
                 continue;
             }
 
+            if (event_bucket[i].events & EPOLLIN) {
+                if (element->read_cb && element->read_cb(mainloop->epoll, element, event_bucket[i], (void*)element->slice_event) != SLICE_RETURN_NORMAL) {
+                    continue;
+                }
+            }
             if (event_bucket[i].events & EPOLLOUT) {
                 slice_mainloop_epoll_event_remove_write(mainloop, event_bucket[i].data.fd, NULL);
 
                 if (element->write_cb && element->write_cb(mainloop->epoll, element, event_bucket[i], (void*)element->slice_event) != SLICE_RETURN_NORMAL) {
-                    continue;
-                }
-            }
-            if (event_bucket[i].events & EPOLLIN) {
-                if (element->read_cb && element->read_cb(mainloop->epoll, element, event_bucket[i], (void*)element->slice_event) != SLICE_RETURN_NORMAL) {
                     continue;
                 }
             }

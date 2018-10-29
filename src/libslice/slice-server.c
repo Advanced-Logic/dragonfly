@@ -120,6 +120,7 @@ ip6_tcp_accept_again:
     if (server->accept_cb && server->accept_cb(session, err_buff) != SLICE_RETURN_NORMAL) {
         printf("Session sock [%d] accept callback return error [%s]\n", sock, err_buff);
         SliceSessionRemove(session, NULL);
+        free(session);
         return SLICE_RETURN_NORMAL;
         //return SLICE_RETURN_ERROR;
     }
@@ -128,6 +129,7 @@ ip6_tcp_accept_again:
         if (server->ready_cb && server->ready_cb(session, err_buff) != SLICE_RETURN_NORMAL) {
             printf("Session sock [%d] ready callback return error [%s]\n", sock, err_buff);
             SliceSessionRemove(session, NULL);
+            free(session);
             return SLICE_RETURN_NORMAL;
             //return SLICE_RETURN_ERROR;
         }

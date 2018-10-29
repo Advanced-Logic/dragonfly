@@ -412,6 +412,7 @@ SliceReturnType slice_connection_socket_write(SliceConnection *conn, char *err)
         //printf("Trying write [%p][%d]\n", buffer, buffer->length);
 
         if (n > 0) {
+            r = 0;
             if (conn->mode & SLICE_CONNECTION_MODE_TCP) {
                 if (conn->ssl_ctx) {
                     if (conn->type == SLICE_CONNECTION_TYPE_CLIENT) {
@@ -472,6 +473,8 @@ SliceReturnType slice_connection_socket_write(SliceConnection *conn, char *err)
             if (buffer->current >= buffer->length) {
                 SliceListRemove(&(conn->write_buffer), buffer, NULL);
                 SliceBufferRelease(mainloop_event->mainloop, &buffer, NULL);
+            } else {
+                break;
             }
         } else {
             SliceListRemove(conn->write_buffer, buffer, NULL);

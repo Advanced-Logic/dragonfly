@@ -8,11 +8,11 @@
 SliceBuffer *slice_buffer_create(SliceMainloop *mainloop, unsigned int size, char *err)
 {
     SliceBuffer *buffer = NULL, *tmp, *buffer_bucket, *new_buff;
-    int adj_size;
+    unsigned int adj_size;
 
     if (size == 0) size = 1;
 
-    adj_size = (((size - 1) / SLICE_BUFFER_BLOCK_SIZE) + 1) * SLICE_BUFFER_BLOCK_SIZE;
+    adj_size = ((size / SLICE_BUFFER_BLOCK_SIZE) + 1) * SLICE_BUFFER_BLOCK_SIZE;
 
     if (mainloop && (tmp = buffer_bucket = SliceMainloopGetBufferBucket(mainloop))) {
         do {
@@ -35,6 +35,7 @@ SliceBuffer *slice_buffer_create(SliceMainloop *mainloop, unsigned int size, cha
             buffer = new_buff;
         }
 
+        buffer->size = adj_size;
         buffer->length = 0;
         buffer->current = 0;
         buffer->data[0] = 0;
@@ -56,7 +57,7 @@ SliceBuffer *slice_buffer_create(SliceMainloop *mainloop, unsigned int size, cha
 SliceReturnType slice_buffer_prepare(SliceMainloop *mainloop, SliceBuffer **buffer, unsigned int need_size, char *err)
 {
     SliceBuffer *new_buff;
-    int adj_size;
+    unsigned int adj_size;
 
     if (!buffer || need_size == 0) {
         if (err) sprintf(err, "Invalid parameter");
@@ -75,7 +76,7 @@ SliceReturnType slice_buffer_prepare(SliceMainloop *mainloop, SliceBuffer **buff
 
         need_size += (*buffer)->length;
 
-        adj_size = (((need_size - 1) / SLICE_BUFFER_BLOCK_SIZE) + 1) * SLICE_BUFFER_BLOCK_SIZE;
+        adj_size = ((need_size / SLICE_BUFFER_BLOCK_SIZE) + 1) * SLICE_BUFFER_BLOCK_SIZE;
 
         //printf("realloc 2 [%lu]\n", (size_t)(sizeof(SliceBuffer) + adj_size));
         if (!(new_buff = (SliceBuffer*)realloc((*buffer), (size_t)(sizeof(SliceBuffer) + adj_size)))) {
